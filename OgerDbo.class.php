@@ -59,8 +59,7 @@ class OgerDbo {
     }
 
     // check for required params
-    preg_match_all('/:(\w+)/', $stmt, $matches);
-    $stmtParams = $matches[1];
+    $stmtParams = static::getStmParamNames($stmt);
     foreach ($stmtParams as $stmtParam) {
       if (!array_key_exists($stmtParam, $execParams)) {
         $msg .= "Required parameter $stmtParam in statement not found in execute parameters. \n";
@@ -83,5 +82,21 @@ class OgerDbo {
   }  // eo check statement params
 
 
+
+  /**
+  * Check parameters for statement.
+  * Only used for debugging, because the error messages of the pdo-drivers are very sparingly.
+  */
+  public static function getStmtParamNames($stmt) {
+
+    preg_match_all('/:(\w+)/', $stmt, $matches);
+    $stmtParams =
+
+    return $matches[1];
+  }  // eo get stmt param names
+
+
+
+}  // eo class
 
 ?>
