@@ -5,202 +5,56 @@
 */
 
 
-/**
-* Handle database structure.
-* Supported databases are: Only MySql by now.
+/***
+* Config database access, check, update DbStruc, etc
+* Info: We do not catch db errors longer, because if there is an error
+* in the db struc the app should not start at all
 */
-class OgerDbStruct {
+class ConfigDb {
 
+  public static $newDbStruc = array();
+  public static $newDbStrucSerial;
+  public static $oldDbStruc = array();
+  public static $oldDbStrucSerial;
 
-  private $conn;  ///< PDO instance created elsewhere.
-  private $driverName;  ///< PDO driver name.
-  private $dbName;  ///< Database name.
-
-
-  /**
-   * Construct with a PDO instance and database name.
-   * @param $conn  A PDO instance that represents a valid database connection.
-   * @param $dbName  Database name - because this cannot be detected from the PDO connection.
-   */
-  public function __construct($conn, $dbName) {
-
-    $this->conn = $conn;
-    $this->dbName = $dbName;
-
-    // check for supported driver
-    $this->driverName = $this->conn->getAttribute(PDO::ATTR_DRIVER_NAME);
-    switch ($this->driverName) {
-    case "mysql":
-      break;
-    default:
-      throw new Exception("PDO driver {$this->driverName} not supported.");
-    }
-  }  // eo construct
+  public static $memoDbDef;  // mainly for pre- and postprocessing
 
 
   /**
-  * Get the database structure.
-  * Keys for table and column names are in lowercase, so identifier cannot
-  * be used with different case. The structure does not contain privileges.
-  * @return Array with database structure.
+  * init database settings
   */
-  public function getStruct() {
+  public static function initDb($dbDefAliasId, $finalCheck) {
 
-    switch ($this->driverName) {
-    case "mysql":
-      return $this->getMysqlInformationSchema();
-      break;
-    }
-  }  // eo get db struct
+    // init database connection
+    $dbDef = Config::$dbDefs[$dbDefAliasId];
+    Db::init($dbDef['dbName'], $dbDef['dbUser'], $dbDef['dbPass'], $dbDef['dbAttributes']);
 
+    // handle final setting, do dbcheck only if final flag is set
+    if ($finalCheck) {
 
+      if (!$dbDef) {
+        echo Extjs::unsuccessMsg(Oger::_('No database definition given or detected.'));
+        exit;
+      }
 
-  /**
-  * Get information schema for a mysql database.
-  * @return @see this::getStruct()
-  */
-  public function getMysqlInformationSchema() {
+      try {
+        $conn = Db::getConn();
+      }
+      catch (Exception $ex) {
+        $conn = false;
+      }
+      if ($conn === false) {
+        echo Extjs::unsuccessMsg(Oger::_('Kann Datenbankverbindung nicht herstellen.'));
+        exit;
+      }
 
-    $dbStruct = array();
-    $dbStruct["__TABLES__"] = array();
+      if (!$dbDef['skipDbStrucCheck'] || $dbDef['forceDbStrucUpdate']) {
+        self::checkDbStruc($dbDef);
+      }
 
-    // ------------------
-    // get schema info
+    }  // eo handle final settings
 
-    $defCatalogName = "def";
-
-    $pstmt = $this->conn->prepare("
-        SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME
-          FROM INFORMATION_SCHEMA.SCHEMATA
-          WHERE INFORMATION_SCHEMA.SCHEMATA.CATALOG_NAME=:catalogName AND
-                INFORMATION_SCHEMA.SCHEMATA.SCHEMA_NAME=:dbName
-        ");
-    $pstmt->execute(array("catalogName" => $defCatalogName, "dbName" => $this->dbName));
-    $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
-    $pstmt->closeCursor();
-
-    if (count($schemaRecords) > 1) {
-      throw new Exception("More than one schema found with name :{$this->dbName}");
-    }
-
-    // return silently if no schema found
-    if (count($schemaRecords) < 1) {
-      return $dbStruct;
-    }
-
-    $dbStruct["__SCHEMA_DEF__"] = reset($schemaRecords);
-
-
-    // -----------------------
-    // get tables info
-
-    $pstmt = $this->conn->prepare("
-        SELECT TABLE_NAME, TABLE_COLLATION
-          FROM INFORMATION_SCHEMA.TABLES
-          WHERE INFORMATION_SCHEMA.TABLES.TABLE_CATALOG=:catalogName AND
-                INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA=:dbName
-        ");
-    $pstmt->execute(array("catalogName" => $defCatalogName, "dbName" => $this->dbName));
-    $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
-    $pstmt->closeCursor();
-
-    foreach ($tableRecords as $tableRecord) {
-
-      $tableName = $tableRecord["TABLE_NAME"];
-      $tableKey = strtolower($tableName);
-
-      $dbStruct["__TABLE_NAMES__"][$tableKey] = $tableName;
-      $dbStruct["__TABLES__"][$tableKey]["__TABLE_DEF__"] = $tableRecord;
-
-
-      // -------------------
-      // get columns info
-      // COLUMN_KEY is short index info (PRI, MUL, ...)
-      // most important is COLUMN_TYPE - e.g. int(11)
-
-      $pstmt = $this->conn->prepare("
-          SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION,
-                 COLUMN_TYPE, DATA_TYPE,
-                 COLUMN_DEFAULT, IS_NULLABLE,
-                 CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, CHARACTER_SET_NAME, COLLATION_NAME,
-                 NUMERIC_PRECISION, NUMERIC_SCALE,
-                 COLUMN_KEY
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE INFORMATION_SCHEMA.COLUMNS.TABLE_CATALOG=:catalogName AND
-                  INFORMATION_SCHEMA.COLUMNS.TABLE_SCHEMA=:dbName AND
-                  INFORMATION_SCHEMA.COLUMNS.TABLE_NAME=:tableName
-            ORDER BY ORDINAL_POSITION
-          ");
-
-      $pstmt->execute(array("catalogName" => $defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
-      $columnRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
-      $pstmt->closeCursor();
-
-      foreach ($columnRecords as $columnRecord) {
-
-        $columnName = $columnRecord["COLUMN_NAME"];
-        $columnKey = strtolower($columnName);
-
-        $dbStruct["__TABLES__"][$tableKey]["__COLUMN_NAMES__"][$columnKey] = $columnName;
-        $dbStruct["__TABLES__"][$tableKey]["__COLUMNS__"][$columnKey] = $columnRecord;
-
-      }  // eo column loop
-
-
-      // ---------------
-      // get key info
-
-      // the KEY_COLUMN_USAGE misses info like unique, nullable, etc so wie use STATISTICS for now
-      $pstmt = $this->conn->prepare("
-          SELECT INDEX_NAME, SEQ_IN_INDEX AS ORDINAL_POSITION, COLUMN_NAME,	NON_UNIQUE
-            FROM INFORMATION_SCHEMA.STATISTICS
-            WHERE INFORMATION_SCHEMA.STATISTICS.TABLE_CATALOG=:catalogName AND
-                  INFORMATION_SCHEMA.STATISTICS.TABLE_SCHEMA=:dbName AND
-                  INFORMATION_SCHEMA.STATISTICS.TABLE_NAME=:tableName
-            ORDER BY INDEX_NAME, ORDINAL_POSITION
-          ");
-      $pstmt->execute(array("catalogName" => $defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
-      $indexRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
-      $pstmt->closeCursor();
-
-      foreach ($indexRecords as $indexRecord) {
-
-        $indexName = $indexRecord["INDEX_NAME"];
-        $indexKey = strtolower($indexName);
-
-        $indexRecord["UNIQUE"] = ($indexRecord["NON_UNIQUE"] ? "0" : "1");
-        unset($indexRecord["NON_UNIQUE"]);
-
-        $dbStruct["__TABLES__"][$tableKey]["__INDEX_NAMES__"][$indexKey] = $indexName;
-        $dbStruct["__TABLES__"][$tableKey]["__INDEXES__"][$indexKey][$indexRecord["ORDINAL_POSITION"]] = $indexRecord;
-
-      }  // eo index loop
-
-    }  // eo table loop
-
-
-    return $dbStruct;
-  }  // eo get db structure
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  }  // eo init db
 
 
 
@@ -275,7 +129,7 @@ class OgerDbStruct {
 
     // get current old db structure
     $log .= "\nGet current structure for database DSN " . $dbDef['dbName'] . ".\n\n";
-    self::$oldDbStruc = self::getStruc($dbDef['dbName']);
+    self::$oldDbStruc = self::getDbStruc($dbDef['dbName']);
 
 
     self::$memoDbDef = $dbDef;
@@ -613,7 +467,209 @@ class OgerDbStruct {
 
   }  // eo check and update db struc
 
+  /**
+  * Get database structure (driver dependend).
+  * ATTENTION: Be aware, that a db connection must be open when calling this method!
+  */
+  public static function getDbStruc($dsn) {
 
+    $dbStruc = array();
+
+    // get database name
+    list($dbDriver, $driverSpecificPart) = explode(':', $dsn, 2);
+
+    $tmpParts = explode(';', $driverSpecificPart);
+    $dsnParts = array();
+    foreach ($tmpParts as $tmpPart) {
+      list($key, $value) = explode("=", $tmpPart, 2);
+      $dsnParts[$key] = $value;
+    }
+
+    if ($dbDriver == 'mysql') {
+      // mysql should be ansi information schema compatible (and may be has some extensions)
+      // $dbStruc = self::getDbStrucMysql($dbName);
+      $dbStruc = self::getDbStrucAnsiInformationSchema($dsnParts['dbname']);
+    }
+    /*
+    elseif ($dbDriver == 'sqlite') {
+      $dbStruc = self::getDbStrucSqlite($dbName);
+    }
+    elseif ($dbDriver == 'ansiinformationschema') {
+      $dbStruc = self::getDbStrucAnsiInformationSchema($dbName);
+    }
+    */
+
+    return $dbStruc;
+
+  }  // eo get db struc
+
+
+
+  /**
+  * Get database structure (for sqlite databases).
+  */
+  public static function getDbStrucSqlite($dbName) {
+
+    $dbStruc = array();
+
+    /*
+
+    // from http://www.sqlite.org/cvstrac/wiki?p=InformationSchema
+
+    CREATE VIEW INFORMATION_SCHEMA_TABLES AS
+      SELECT * FROM (
+          SELECT 'main'     AS TABLE_CATALOG,
+                 'sqlite'   AS TABLE_SCHEMA,
+                 tbl_name   AS TABLE_NAME,
+                 CASE WHEN type = 'table' THEN 'BASE TABLE'
+                      WHEN type = 'view'  THEN 'VIEW'
+                 END        AS TABLE_TYPE,
+                 sql        AS TABLE_SOURCE
+          FROM   sqlite_master
+          WHERE  type IN ('table', 'view')
+                 AND tbl_name NOT LIKE 'INFORMATION_SCHEMA_%'
+          UNION
+          SELECT 'main'     AS TABLE_CATALOG,
+                 'sqlite'   AS TABLE_SCHEMA,
+                 tbl_name   AS TABLE_NAME,
+                 CASE WHEN type = 'table' THEN 'TEMPORARY TABLE'
+                      WHEN type = 'view'  THEN 'TEMPORARY VIEW'
+                 END        AS TABLE_TYPE,
+                 sql        AS TABLE_SOURCE
+          FROM   sqlite_temp_master
+          WHERE  type IN ('table', 'view')
+                 AND tbl_name NOT LIKE 'INFORMATION_SCHEMA_%'
+      ) ORDER BY TABLE_TYPE, TABLE_NAME;
+
+    */
+
+    // Note, 12 Jan 2006: I reformatted this page so it was actually possible to read it,
+    // but I did not debug the SQL code given. As stated, it does not work; any query on the view
+    // gives the error "no such table: sqlite_temp_master". If you don't use temporary tables
+    // you can just rip out the second inner SELECT (which then renders the outer SELECT unnecessary):
+
+    /*
+
+    CREATE VIEW INFORMATION_SCHEMA_TABLES AS
+        SELECT 'main'     AS TABLE_CATALOG,
+               'sqlite'   AS TABLE_SCHEMA,
+               tbl_name   AS TABLE_NAME,
+               CASE WHEN type = 'table' THEN 'BASE TABLE'
+                    WHEN type = 'view'  THEN 'VIEW'
+               END        AS TABLE_TYPE,
+               sql        AS TABLE_SOURCE
+        FROM   sqlite_master
+        WHERE  type IN ('table', 'view')
+               AND tbl_name NOT LIKE 'INFORMATION_SCHEMA_%'
+        ORDER BY TABLE_TYPE, TABLE_NAME;
+
+    }
+
+    */
+
+
+    return $dbStruc();
+
+  } // eo db struc for mysql databases
+
+
+
+  /**
+  * Get database structure (for databases with ansi conform information schema).
+  */
+  public static function getDbStrucAnsiInformationSchema($dbName) {
+
+    $dbStruc = array();
+
+    $pstmt = Db::prepare('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA=:dbName');
+    $pstmt->execute(array('dbName' => $dbName));
+    $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+
+    $tables = array();
+    foreach ($tableRecords as $tableRecord) {
+
+      // get columns info
+
+      $pstmt = Db::prepare('SELECT COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, ' .
+                                    'CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, CHARACTER_SET_NAME, COLLATION_NAME, ' .
+                                    'NUMERIC_PRECISION, NUMERIC_SCALE, ORDINAL_POSITION, ' .
+                                    'COLUMN_TYPE, ' .
+                                    'COLUMN_KEY ' .
+                             ' FROM INFORMATION_SCHEMA.COLUMNS ' .
+                             ' WHERE INFORMATION_SCHEMA.COLUMNS.TABLE_SCHEMA=:dbName AND ' .
+                                   ' INFORMATION_SCHEMA.COLUMNS.TABLE_NAME=:tableName ' .
+                             ' ORDER BY ORDINAL_POSITION'
+                          );
+
+      $pstmt->execute(array('dbName' => $dbName, 'tableName' => $tableRecord['TABLE_NAME']));
+      $columnRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+      $pstmt->closeCursor();
+
+      $columns = array();
+      foreach ($columnRecords as $columnRecord) {
+        $columns[$columnRecord['COLUMN_NAME']] = $columnRecord;
+      }
+      $tableRecord['columns'] = $columns;
+
+
+      // get key info
+      /*
+      $pstmt = Db::prepare('SELECT CONSTRAINT_NAME, ORDINAL_POSITION,	POSITION_IN_UNIQUE_CONSTRAINT, COLUMN_NAME ' .
+                             ' FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' .
+                             ' WHERE TABLE_SCHEMA=:dbName AND ' .
+                                   ' TABLE_NAME=:tableName' .
+                              ' ORDER BY TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION');
+      $pstmt->execute(array('dbName' => $dbName, 'tableName' => $tableRecord['TABLE_NAME']));
+      $keyRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+      $pstmt->closeCursor();
+
+      $keys = array();
+      foreach ($keyRecords as $keyRecord) {
+        $keys[$keyRecord['CONSTRAINT_NAME']][$keyRecord['ORDINAL_POSITION']] = $keyRecord;
+      }
+      $tableRecord['keys'] = $keys;
+      */
+
+      // get key info2 - use statistic schema
+      $pstmt = Db::prepare('SELECT INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME,	NON_UNIQUE ' .
+                             ' FROM INFORMATION_SCHEMA.STATISTICS ' .
+                             ' WHERE TABLE_SCHEMA=:dbName AND ' .
+                                   ' TABLE_NAME=:tableName' .
+                              ' ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX');
+      $pstmt->execute(array('dbName' => $dbName, 'tableName' => $tableRecord['TABLE_NAME']));
+      $keyRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+      $pstmt->closeCursor();
+
+      $keys = array();
+      foreach ($keyRecords as $keyRecord) {
+        $keys[$keyRecord['INDEX_NAME']][$keyRecord['SEQ_IN_INDEX']] = $keyRecord;
+      }
+      $tableRecord['keys'] = $keys;
+
+
+      // finally put table info to overall record
+      $tables[$tableRecord['TABLE_NAME']] = $tableRecord;
+
+    }  // loop over table names
+
+
+
+    // return tables array
+    return $tables;
+
+
+    /*
+    we dont need this extra info
+    // compose final array
+    $dbStruc[$dbName] = array('driver' => $dbDriver,
+                              'name' => $dbName,
+                              'tables' => $tables);
+
+    return $dbStruc;
+    */
+
+  }  // eo get db structure
 
 
 

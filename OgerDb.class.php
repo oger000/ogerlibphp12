@@ -9,10 +9,6 @@
 /**
 * Helperclass for database handling.
 * This class contains convenience methods for SQL and PDO.
-* <BR>DEPENDS ON:
-* <UL>
-*  <LI>class Oger
-* </UL>
 */
 class OgerDb {
 
@@ -122,8 +118,6 @@ class OgerDb {
   public static function getStmtParamNames($stmt) {
 
     preg_match_all('/:(\w+)/', $stmt, $matches);
-    $stmtParams =
-
     return $matches[1];
   }  // eo get stmt param names
 
@@ -131,7 +125,12 @@ class OgerDb {
 
   /**
   * Creates a SQL WHERE clause designed for a prepared statement.
-  * The WHERE clause containing placeholder for named parameters.
+  * The WHERE clause containing placeholder for named parameters.<BR>
+  * Remark on prepared statements (PHP 5.3):
+  * Looks like repared statements are always filled in as strings, even
+  * if they are forced to PHP numbers (for example multiplied with 1).
+  * So whe have to explicitly cast them in the WHERE statement if
+  * we need numbers.
   * @param $params  An array with the parameter names for the SQL WHERE clause of a SQL statement.
   *                 If an assoziative array is given then the keys are used as parameter names.
   *                 For every parameter a "parameterName=:parameterName" stanza is created.
@@ -139,13 +138,6 @@ class OgerDb {
   * @param string $glueOp  Optional logical operator that glues together the fields.
   *                 Defaults to "AND".
   * @return String with WHERE clause without the WHERE keyword.
-  */
-  /*
-  * Memo on prepared statements (php 5.3):
-  * Looks like repared statements are always filled in as strings, even
-  * if they are forced to numbers (for example multiplied with 1).
-  * So whe have to explicitly cast them in the where statement if
-  * we need numbers.
   */
   public static function createWhereStmt($params, $glueOp = "AND") {
 
@@ -167,11 +159,11 @@ class OgerDb {
 
       // evaluate extended syntax (NOT DOCUMENTED !!!)
       if (is_array($value)) {
-        $glueOpTmp = ($value['glueOp'] :? $glueOp);
-        $fieldName = ($value['field'] :? $fieldName);
-        $fieldCast = ($value['fieldCast'] :? $fieldCast);
-        $compOp = ($value['compOp'] :? $compOp);
-        $valueCast = ($value['valueCast'] :? $valueCast);
+        $glueOpTmp = ($value['glueOp'] ?: $glueOp);
+        $fieldName = ($value['field'] ?: $fieldName);
+        $fieldCast = ($value['fieldCast'] ?: $fieldCast);
+        $compOp = ($value['compOp'] ?: $compOp);
+        $valueCast = ($value['valueCast'] ?: $valueCast);
       }
 
       $fieldName = "{static::$escNamBegin}$fieldName{static::$escNamEnd}";
