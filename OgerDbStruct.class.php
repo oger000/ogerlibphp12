@@ -217,10 +217,22 @@ echo nl2br($stmt); exit;
             ($columnDef["COLLATION_NAME"] ? "COLLATE {$columnDef["COLLATION_NAME"]} " : "") .
             ($columnDef["IS_NULLABLE"] == "NO" ? "NOT NULL " : "");
 
-    if (!is_null($columnDef["COLUMN_DEFAULT"] || $columnDef["IS_NULLABLE"] == "YES")) {
-      $default = (is_null($columnDef['COLUMN_DEFAULT']) ? "NULL" : $columnDef['COLUMN_DEFAULT']);
-      $stmt .= "DEFAULT '$default'";
-    }
+    // create default
+    if (!is_null($columnDef["COLUMN_DEFAULT"]) || $columnDef["IS_NULLABLE"] == "YES") {
+
+      $default = $columnDef['COLUMN_DEFAULT'];
+      if (is_null($default)) {
+        $default = "NULL";
+      }
+      elseif ($default == "CURRENT_TIMESTAMP") {
+        // nothing to do
+      }
+      else {
+        $default = "'$default'";
+      }
+
+      $stmt .= "DEFAULT $default";
+    }  // eo default
 
     return $stmt;
   }  // eo column def stmt

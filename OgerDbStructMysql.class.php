@@ -13,8 +13,8 @@
 class OgerDbStructMysql extends OgerDbStruct {
 
 
-  protected $escNamBegin = '`';
-  protected $escNamEnd = '`';
+  protected $encNamBegin = '`';
+  protected $encNamEnd = '`';
 
 
   /**
