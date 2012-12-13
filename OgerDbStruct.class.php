@@ -18,8 +18,8 @@ abstract class OgerDbStruct {
 
   protected $opts = array();
 
-  protected $encNamBegin = '"';
-  protected $encNamEnd = '"';
+  protected $quoteNamBegin = '"';
+  protected $quoteNamEnd = '"';
 
 
   /**
@@ -120,7 +120,7 @@ abstract class OgerDbStruct {
     $struct["__SERIAL__"] = time();
     $struct["__TIME__"] = date("c", $struct["__SERIAL__"]);
 
-    $struct["__SCHEMA_DEF__"] = array();
+    $struct["__SCHEMA_META__"] = array();
     $struct["__TABLES__"] = array();
 
     return $struct;
@@ -128,12 +128,12 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Enclose a table or column name.
-  * @param $name Name to be enclosed.
+  * Quote a table or column name.
+  * @param $name Name to be quoted.
   */
-  public function encloseName($name) {
-    return "{$this->encNamBegin}$name{$this->encNamEnd}";
-  }  // eo enc name
+  public function quoteName($name) {
+    return "{$this->quoteNamBegin}$name{$this->quoteNamEnd}";
+  }  // eo quote name
 
 
   /**
@@ -186,58 +186,53 @@ abstract class OgerDbStruct {
   * @param $tableDef Array with the table definition.
   */
   public function addTable($tableDef) {
-
-    $tableMeta = $tableDef["__TABLE_META__"];
-    $tableName = $this->encloseName($tableMeta["TABLE_NAME"]);
-    $stmt = "CREATE TABLE $tableName (\n  ";
-
-    $delim = "";
-    foreach ($tableDef["__COLUMNS__"] as $columnKey => $columnDef) {
-        $stmt .= $delim . $this->columnDefStmt($columnDef);
-        $delim = ",\n  ";
-    }  // eo column loop
-
-    $stmt .= "\n)" .
-          // " DEFAULT CHARSET={$tableMeta['']}" .
-          " COLLATE={$tableMeta['TABLE_COLLATION']}";
-
-echo nl2br($stmt); exit;
-    return $stmt;
+    $stmt = $this->tableDefCreateStmt($tableDef);
+    $pstmt = $this->conn->prepare($stmt);
+    $pstmt->execute();
   }  // eo add table
+
+
+  /**
+  * Add a column to a table structure.
+  * @param $columnDef Array with the table definition.
+  */
+  public function addColumn($columnDef) {
+    $stmt = $this->columnDefAddStmt($columnDef);
+    $pstmt = $this->conn->prepare($stmt);
+    $pstmt->execute();
+  }  // eo add column to table
+
+
+  /**
+  * Create an add table statement.
+  * @param $tableDef Array with the table definition.
+  * @return The SQL statement for table definition.
+  */
+  abstract public function tableDefCreateStmt($tableDef);
+
+
+  /**
+  * Create an add column statement.
+  * @param $columnDef Array with the column definition.
+  * @return The SQL statement for adding a column.
+  */
+  abstract public function columnDefAddStmt($columnDef);
 
 
   /**
   * Create a column definition statement.
   * @param $columnDef  Array with column definition.
+  * @return The SQL statement part for a column definition.
   */
-  public function columnDefStmt($columnDef) {
-
-    $stmt = $this->encloseName($columnDef["COLUMN_NAME"]) . " " .
-            $columnDef["COLUMN_TYPE"] . " " .
-            ($columnDef["COLLATION_NAME"] ? "COLLATE {$columnDef["COLLATION_NAME"]} " : "") .
-            ($columnDef["IS_NULLABLE"] == "NO" ? "NOT NULL " : "");
-
-    // create default
-    if (!is_null($columnDef["COLUMN_DEFAULT"]) || $columnDef["IS_NULLABLE"] == "YES") {
-
-      $default = $columnDef['COLUMN_DEFAULT'];
-      if (is_null($default)) {
-        $default = "NULL";
-      }
-      elseif ($default == "CURRENT_TIMESTAMP") {
-        // nothing to do
-      }
-      else {
-        $default = "'$default'";
-      }
-
-      $stmt .= "DEFAULT $default";
-    }  // eo default
-
-    return $stmt;
-  }  // eo column def stmt
+  abstract public function columnDefStmt($columnDef);
 
 
+  /**
+  * Create a table index definition statement.
+  * @param $indexDef  Array with index definition.
+  * @return The SQL statement for the index definition.
+  */
+  abstract public function indexDefStmt($indexDef);
 
 
 

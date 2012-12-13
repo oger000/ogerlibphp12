@@ -9,12 +9,13 @@
 /**
 * Handle database structure for mysql databases.
 * @see class OgerDbStruct.
+* Charset and Collation are only used when creating tables.
 */
 class OgerDbStructMysql extends OgerDbStruct {
 
 
-  protected $encNamBegin = '`';
-  protected $encNamEnd = '`';
+  protected $quoteNamBegin = '`';
+  protected $quoteNamEnd = '`';
 
 
   /**
@@ -159,21 +160,170 @@ class OgerDbStructMysql extends OgerDbStruct {
         $indexKey = strtolower($indexName);
 
         $indexRecord["UNIQUE"] = ($indexRecord["NON_UNIQUE"] ? "0" : "1");
-        unset($indexRecord["NON_UNIQUE"]);
+
+        // detect index type
+        $indexType = "";
+        if ($indexName == "PRIMARY") {
+          $indexType = "PRIMARY";
+        }
+        elseif (!$indexRecord["NON_UNIQUE"]) {
+          $indexType = "UNIQUE";
+        }
 
         $struct["__TABLES__"][$tableKey]["__INDEX_NAMES__"][$indexKey] = $indexName;
-        $struct["__TABLES__"][$tableKey]["__INDEXES__"][$indexKey][$indexRecord["ORDINAL_POSITION"]] = $indexRecord;
+
+        // the meta info is taken from the last column info which overwrites the prevous meta info
+        $struct["__TABLES__"][$tableKey]["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_NAME"] = $indexName;
+        $struct["__TABLES__"][$tableKey]["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_KEY_TYPE"] = $indexType;
+
+        // index columns
+        $indexColumnKey = strtolower($indexRecord["COLUMN_NAME"]);
+        $struct["__TABLES__"][$tableKey]["__INDICES__"][$indexKey]["__INDEX_COLUMNS__"][$indexColumnKey] = $indexRecord;
 
       }  // eo index loop
 
     }  // eo table loop
 
-
     return $struct;
   }  // eo get db structure
 
 
+  /**
+  * Create an add table statement.
+  * @see OgerDbStruct::tableDefCreateStmt().
+  */
+  public function tableDefCreateStmt($tableDef) {
 
+    $tableMeta = $tableDef["__TABLE_META__"];
+    $tableName = $this->quoteName($tableMeta["TABLE_NAME"]);
+    $stmt = "CREATE TABLE $tableName (\n  ";
+
+    // force column order
+    $columns = array();
+    foreach ($tableDef["__COLUMNS__"] as $columnKey => $columnDef) {
+      $columns[$columnDef["ORDINAL_POSITION"] * 1] = $columnDef;
+    }
+    ksort($columns);
+
+
+    $delim = "";
+    foreach ($columns as $columnDef) {
+      $stmt .= $delim . $this->columnDefStmt($columnDef);
+      $delim = ",\n  ";
+    }  // eo column loop
+
+    // indices
+    if ($tableDef["__INDICES__"]) {
+      foreach ($tableDef["__INDICES__"] as $indexKey => $indexDef) {
+        $stmt .= $delim . $this->indexDefStmt($indexDef);
+      }
+
+    }  // eo index loop
+
+    $stmt .= "\n)";
+
+    // table defaults
+    // Note on charset:
+    // Looks like mysql derives the charset from the collation
+    // via the INFORMATION_SCHEMA.COLLATION_CHARACTER_SET_APPLICABILITY table
+    // and does this internally automatically if a collation is given.
+    // So we depend on this - provide the collation and omit the charset.
+    $stmt .= " DEFAULT" .
+          // " CHARSET={$tableMeta['']}" .  // see note above
+          " COLLATE={$tableMeta['TABLE_COLLATION']}";
+
+    return $stmt;
+  }  // eo add table
+
+
+  /**
+  * Create a column definition statement.
+  * @see OgerDbStruct::columnDefStmt().
+  */
+  public function columnDefStmt($columnDef) {
+
+    $stmt = $this->quoteName($columnDef["COLUMN_NAME"]) . " " .
+            $columnDef["COLUMN_TYPE"] . " " .
+            ($columnDef["COLLATION_NAME"] ? "COLLATE {$columnDef["COLLATION_NAME"]} " : "") .
+            ($columnDef["IS_NULLABLE"] == "NO" ? "NOT NULL " : "");
+
+    // create column default
+    if (!is_null($columnDef["COLUMN_DEFAULT"]) || $columnDef["IS_NULLABLE"] == "YES") {
+
+      $default = $columnDef['COLUMN_DEFAULT'];
+      if (is_null($default)) {
+        $default = "NULL";
+      }
+      elseif ($default == "CURRENT_TIMESTAMP") {
+        // nothing to do
+      }
+      else {
+        // quote default value
+        $default = "'$default'";
+      }
+
+      $stmt .= "DEFAULT $default";
+    }  // eo default
+
+    return $stmt;
+  }  // eo column def stmt
+
+
+  /**
+  * Create a table index statement.
+  * @see OgerDbStruct::indexDefStmt().
+  */
+  public function indexDefStmt($indexDef) {
+
+    $indexName = " " . $this->quoteName($indexDef["__INDEX_META__"]["INDEX_NAME"]);
+
+    // the primary key has no separate name
+    if ($indexDef["__INDEX_META__"]["INDEX_KEY_TYPE"] == "PRIMARY") {
+      $indexName = "";
+    }
+
+    $indexKeyType = $indexDef["__INDEX_META__"]["INDEX_KEY_TYPE"];
+    if ($indexKeyType) {
+      $indexKeyType .= " ";
+    }
+
+    $stmt .= "{$indexKeyType}KEY{$indexName}";
+
+    // force order of column names
+    $colNames = array();
+    foreach ($indexDef["__INDEX_COLUMNS__"] as $indexColumnDef) {
+      $colNames[$indexColumnDef["ORDINAL_POSITION"] * 1] = $this->quoteName($indexColumnDef["COLUMN_NAME"]);
+    }
+    ksort($colNames);
+
+    // put fields to statement
+    $stmt .= " (" . implode(", ", $colNames) . ")";
+
+    return $stmt;
+  }  // eo index def
+
+
+  /**
+  * Create an add column statement.
+  * @see OgerDbStruct::columnDefAddStmt().
+  */
+  public function columnDefAddStmt($columnDef) {
+
+    $stmt = "ALTER TABLE " .
+            $this->quoteName($columnDef["TABLE_NAME"]) .
+            " ADD COLUMN " .
+            $this->columnDefStmt($columnDef);
+
+  }  // eo add column
+
+
+
+
+
+
+
+
+// #################################################
 
 
 
