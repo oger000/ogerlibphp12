@@ -9,7 +9,7 @@
 /**
 * Handle database structure for mysql databases.
 * @see class OgerDbStruct.
-* Charset and Collation are only used when creating tables.
+* We handle Collations (which in turn modifies charset).
 */
 class OgerDbStructMysql extends OgerDbStruct {
 
@@ -242,10 +242,11 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function columnDefStmt($columnDef) {
 
-    $stmt = $this->quoteName($columnDef["COLUMN_NAME"]) . " " .
-            $columnDef["COLUMN_TYPE"] . " " .
-            ($columnDef["COLLATION_NAME"] ? "COLLATE {$columnDef["COLLATION_NAME"]} " : "") .
-            ($columnDef["IS_NULLABLE"] == "NO" ? "NOT NULL " : "");
+    $stmt = $this->quoteName($columnDef["COLUMN_NAME"]) .
+            " " . $columnDef["COLUMN_TYPE"] .
+            ($columnDef["COLLATION_NAME"] ? " COLLATE {$columnDef["COLLATION_NAME"]}" : "") .
+            ($columnDef["IS_NULLABLE"] == "NO" ? " NOT NULL" : "") .
+            ($columnDef["EXTRA"] ? " {$columnDef["EXTRA"]}" : "");
 
     // create column default
     if (!is_null($columnDef["COLUMN_DEFAULT"]) || $columnDef["IS_NULLABLE"] == "YES") {
@@ -262,7 +263,7 @@ class OgerDbStructMysql extends OgerDbStruct {
         $default = "'$default'";
       }
 
-      $stmt .= "DEFAULT $default";
+      $stmt .= " DEFAULT $default";
     }  // eo default
 
     return $stmt;
@@ -316,6 +317,74 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     return $stmt;
   }  // eo add column
+
+
+  /**
+  * Create an alter table statement for table defaults.
+  * @see OgerDbStruct::columnDefAddStmt().
+  */
+  public function tableDefUpdateStmt($oldTableDef, $newTableDef) {
+
+    $oldTableMeta = $oldTableDef["__TABLE_META__"];
+    $newTableMeta = $newTableDef["__TABLE_META__"];
+
+    if ($newTableMeta["TABLE_COLLATION"] && $newTableMeta["TABLE_COLLATION"] != $oldTableMeta["TABLE_COLLATION"]) {
+      $stmt .= $this->quoteName($oldTableMeta["TABLE_NAME"]) .
+               " COLLATE " . $newTableMeta["TABLE_COLLATION"];
+    }
+
+    // complete if anything changed
+    if ($stmt) {
+      $stmt = "ALTER TABLE $stmt";
+    }
+
+    return $stmt;
+  }  // eo update table
+
+
+  /**
+  * Create an alter table statement to alter a column.
+  * @see OgerDbStruct::columnDefUpdateStmt().
+  */
+  public function columnDefUpdateStmt($oldColumnDef, $newColumnDef) {
+
+    if ($newColumnDef["COLUMN_TYPE"] != $oldColumnDef["COLUMN_TYPE"]) {
+      $changed = true;
+    }
+    if ($newColumnDef["COLLATION_NAME"] && $newColumnDef["COLLATION_NAME"] != $oldColumnDef["COLLATION_NAME"]) {
+      $changed = true;
+    }
+    if ($newColumnDef["IS_NULLABLE"] != $oldColumnDef["IS_NULLABLE"]) {
+      $changed = true;
+    }
+    if ($newColumnDef["COLUMN_DEFAULT"] != $oldColumnDef["COLUMN_DEFAULT"]) {
+      $changed = true;
+    }
+    if ($newColumnDef["EXTRA"] != $oldColumnDef["EXTRA"]) {
+      $changed = true;
+    }
+
+    // create change statement
+    if ($changed) {
+      $stmt = "ALTER TABLE " . $this->quoteName($oldColumnDef["TABLE_NAME"]) .
+              " CHANGE " . $this->quoteName($oldColumnDef["COLUMN_NAME"]) .
+              " " . $this->columnDefStmt($newColumnDef);
+    }
+
+    return $stmt;
+  }  // eo update table
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

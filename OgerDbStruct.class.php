@@ -61,6 +61,7 @@ abstract class OgerDbStruct {
   /**
   * Set option.
   * @param $name Option name.
+  * Valid parameter names are: dryrun, loglevel.
   * @param $value New option value.
   * @return Old option value.
   */
@@ -253,6 +254,93 @@ abstract class OgerDbStruct {
   * @return The SQL statement for adding a column.
   */
   abstract public function columnDefAddStmt($columnDef);
+
+
+  /**
+  * Update existing tables and columns and add missing one.
+  * @param $newStruct Array with the new database structure.
+  */
+  public function updateStruct($newStruct) {
+
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+
+    // get old structure before adding missing parts
+    // because we dont have to update that
+    $oldStruct = $this->getDbStruct();
+
+    // add mising tables and columns
+    $this->addStruct($newStruct);
+
+    // update old table if exits
+    foreach ($newStruct["__TABLES__"] as $newTableKey => $newTableDef) {
+      $oldTableDef = $oldStruct["__TABLES__"][$newTableKey];
+      if ($oldTableDef) {
+        $this->updateTable($oldTableDef, $newTableDef);
+      }
+    }  // eo table loop
+
+  }  // eo update struc
+
+
+  /**
+  * Update an existing table.
+  * @param $oldTableDef Array with the new table structure.
+  * @param $newTableDef Array with the new table structure.
+  */
+  public function updateTable($oldTableDef, $newTableDef) {
+
+    // update table defaults
+    $stmt = $this->tableDefUpdateStmt($oldTableDef, $newTableDef);
+    if ($stmt) {
+      $this->log(static::LOG_DEBUG, $stmt);
+      if (!$this->getOpt("dryrun")) {
+        $pstmt = $this->conn->prepare($stmt);
+        $pstmt->execute();
+      }
+    }
+
+    // update old columns if exist
+    foreach ($newTableDef["__COLUMNS__"] as $newColumnKey => $newColumnDef) {
+      $oldColumnDef = $oldTableDef["__COLUMNS__"][$newColumnKey];
+      if ($oldColumnDef) {
+        $this->updateColumn($oldColumnDef, $newColumnDef);
+      }
+    }
+
+  }  // eo update table
+
+
+  /**
+  * Create an alter table statement for table defaults.
+  * @param $oldTableDef Array with the new table structure.
+  * @param $newTableDef Array with the new table structure.
+  */
+  abstract public function tableDefUpdateStmt($oldTableDef, $newTableDef);
+
+
+  /**
+  * Update an existing column.
+  * @param $oldColumnDef Array with the new column structure.
+  * @param $newColumnDef Array with the new column structure.
+  */
+  public function updateColumn($oldColumnDef, $newColumnDef) {
+    $stmt = $this->columnDefUpdateStmt($oldColumnDef, $newColumnDef);
+    if ($stmt) {
+      $this->log(static::LOG_DEBUG, $stmt);
+      if (!$this->getOpt("dryrun")) {
+        $pstmt = $this->conn->prepare($stmt);
+        $pstmt->execute();
+      }
+    }
+  }  // eo update column
+
+
+  /**
+  * Create an alter table statement to alter a column.
+  * @param $oldColumnDef Array with the new column structure.
+  * @param $newColumnDef Array with the new column structure.
+  */
+  abstract public function columnDefUpdateStmt($oldColumnDef, $newColumnDef);
 
 
 
