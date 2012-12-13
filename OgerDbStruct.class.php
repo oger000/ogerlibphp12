@@ -11,6 +11,9 @@
 */
 abstract class OgerDbStruct {
 
+  const LOG_LOG = 1;
+  const LOG_DEBUG = 5;
+
   protected $conn;  ///< PDO instance created elsewhere.
   protected $dbName;  ///< Database name.
   protected $driverName;  ///< Driver name.
@@ -63,7 +66,7 @@ abstract class OgerDbStruct {
   */
   public function setOpt($name, $value) {
     $ret = $this->getOpt($name);
-    $this->opt[$name] = $value;
+    $this->opts[$name] = $value;
     return $ret;
   }  // eo set opt
 
@@ -73,16 +76,27 @@ abstract class OgerDbStruct {
   * @return Old option value.
   */
   public function getOpt($name) {
-    return $this->opt[$name];
+    return $this->opts[$name];
   }  // eo get opt
 
+
+  /**
+  * Add text to log buffer if log level fits.
+  * @param $msgLogLevel Log level for this log message.
+  * @param $text Text added to the log buffer.
+  */
+  public function log($msgLogLevel, $text) {
+    if ($msgLogLevel <= $this->getOpt("loglevel")) {
+      $this->addLog($text);
+    }
+  }  // eo add log for log level
 
   /**
   * Add text to log buffer.
   * @param $text Text added to the log buffer.
   */
   public function addLog($text) {
-    $this->log .= $text;
+    $this->log .= $text . "\n\n";
   }  // eo add log
 
   /**
@@ -187,8 +201,11 @@ abstract class OgerDbStruct {
   */
   public function addTable($tableDef) {
     $stmt = $this->tableDefCreateStmt($tableDef);
-    $pstmt = $this->conn->prepare($stmt);
-    $pstmt->execute();
+    $this->log(static::LOG_DEBUG, $stmt);
+    if (!$this->getOpt("dryrun")) {
+      $pstmt = $this->conn->prepare($stmt);
+      $pstmt->execute();
+    }
   }  // eo add table
 
 
@@ -198,8 +215,11 @@ abstract class OgerDbStruct {
   */
   public function addColumn($columnDef) {
     $stmt = $this->columnDefAddStmt($columnDef);
-    $pstmt = $this->conn->prepare($stmt);
-    $pstmt->execute();
+    $this->log(static::LOG_DEBUG, $stmt);
+    if (!$this->getOpt("dryrun")) {
+      $pstmt = $this->conn->prepare($stmt);
+      $pstmt->execute();
+    }
   }  // eo add column to table
 
 
@@ -209,14 +229,6 @@ abstract class OgerDbStruct {
   * @return The SQL statement for table definition.
   */
   abstract public function tableDefCreateStmt($tableDef);
-
-
-  /**
-  * Create an add column statement.
-  * @param $columnDef Array with the column definition.
-  * @return The SQL statement for adding a column.
-  */
-  abstract public function columnDefAddStmt($columnDef);
 
 
   /**
@@ -233,6 +245,17 @@ abstract class OgerDbStruct {
   * @return The SQL statement for the index definition.
   */
   abstract public function indexDefStmt($indexDef);
+
+
+  /**
+  * Create an add column statement.
+  * @param $columnDef Array with the column definition.
+  * @return The SQL statement for adding a column.
+  */
+  abstract public function columnDefAddStmt($columnDef);
+
+
+
 
 
 
