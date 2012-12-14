@@ -199,12 +199,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     $stmt = "CREATE TABLE $tableName (\n  ";
 
     // force column order
-    $columns = array();
-    foreach ($tableDef["__COLUMNS__"] as $columnKey => $columnDef) {
-      $columns[$columnDef["ORDINAL_POSITION"] * 1] = $columnDef;
-    }
-    ksort($columns);
-
+    $this->orderTableColumns($tableDef["__COLUMNS__"]);
 
     $delim = "";
     foreach ($columns as $columnDef) {
@@ -234,6 +229,31 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     return $stmt;
   }  // eo add table
+
+
+  /**
+  * Force order of table columns.
+  * @see OgerDbStruct::orderTableColumns().
+  */
+  public function orderTableColumns(&$columns){
+
+    $tmpCols = array();
+
+    // preserve references
+    foreach ($columns as $columnKey => &$columnDef) {
+      $tmpCols[$columnDef["ORDINAL_POSITION"] * 1] = &$columnDef;
+    }
+    ksort($tmpCols);
+
+    // assign back to original array
+    $columns = array();
+    foreach ($tmpCols as &$columnDef) {
+      $columns[strtolower($columnDef["COLUMN_NAME"])] = &$columnDef;
+    }
+
+    // return per value
+    return $columns;
+  }  // eo order table columns
 
 
   /**

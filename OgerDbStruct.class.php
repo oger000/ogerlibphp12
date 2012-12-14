@@ -13,6 +13,7 @@ abstract class OgerDbStruct {
 
   const LOG_LOG = 1;
   const LOG_DEBUG = 5;
+  const LOG_NOTICE = 7;
 
   protected $conn;  ///< PDO instance created elsewhere.
   protected $dbName;  ///< Database name.
@@ -230,6 +231,17 @@ abstract class OgerDbStruct {
   * @return The SQL statement for table definition.
   */
   abstract public function tableDefCreateStmt($tableDef);
+
+
+  /**
+  * Force order of table columns.
+  * @param columns Array with the column definitions.
+  *        The columns array is passed per reference so
+  *        the columns are ordered in place and you
+  *        dont need the return value.
+  * @return Ordered array with the column definition.
+  */
+  abstract public function orderTableColumns(&$columns);
 
 
   /**
