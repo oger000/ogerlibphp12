@@ -310,18 +310,43 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $stmt .= "{$indexKeyType}KEY{$indexName}";
 
-    // force order of column names
+    // force order of columns and extract names
+    $this->orderIndexColumns($indexDef["__INDEX_COLUMNS__"]);
     $colNames = array();
     foreach ($indexDef["__INDEX_COLUMNS__"] as $indexColumnDef) {
-      $colNames[$indexColumnDef["ORDINAL_POSITION"] * 1] = $this->quoteName($indexColumnDef["COLUMN_NAME"]);
+      $colNames[] = $this->quoteName($indexColumnDef["COLUMN_NAME"]);
     }
-    ksort($colNames);
 
     // put fields to statement
     $stmt .= " (" . implode(", ", $colNames) . ")";
 
     return $stmt;
   }  // eo index def
+
+
+  /**
+  * Force order of index columns.
+  * @see OgerDbStruct::orderIndexColumns().
+  */
+  public function orderIndexColumns(&$columns){
+
+    $tmpCols = array();
+
+    // preserve references
+    foreach ($columns as $columnKey => &$columnDef) {
+      $tmpCols[$columnDef["ORDINAL_POSITION"] * 1] = &$columnDef;
+    }
+    ksort($tmpCols);
+
+    // assign back to original array
+    $columns = array();
+    foreach ($tmpCols as &$columnDef) {
+      $columns[strtolower($columnDef["COLUMN_NAME"])] = &$columnDef;
+    }
+
+    // return per value
+    return $columns;
+  }  // eo order table columns
 
 
   /**
@@ -343,10 +368,10 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an alter table statement for table defaults.
   * @see OgerDbStruct::columnDefAddStmt().
   */
-  public function tableDefUpdateStmt($oldTableDef, $newTableDef) {
+  public function tableDefUpdateStmt($newTableDef, $oldTableDef) {
 
-    $oldTableMeta = $oldTableDef["__TABLE_META__"];
     $newTableMeta = $newTableDef["__TABLE_META__"];
+    $oldTableMeta = $oldTableDef["__TABLE_META__"];
 
     if ($newTableMeta["TABLE_COLLATION"] && $newTableMeta["TABLE_COLLATION"] != $oldTableMeta["TABLE_COLLATION"]) {
       $stmt .= $this->quoteName($oldTableMeta["TABLE_NAME"]) .
@@ -366,7 +391,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an alter table statement to alter a column.
   * @see OgerDbStruct::columnDefUpdateStmt().
   */
-  public function columnDefUpdateStmt($oldColumnDef, $newColumnDef) {
+  public function columnDefUpdateStmt($newColumnDef, $oldColumnDef) {
 
     if ($newColumnDef["COLUMN_TYPE"] != $oldColumnDef["COLUMN_TYPE"]) {
       $changed = true;

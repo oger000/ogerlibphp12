@@ -172,12 +172,16 @@ abstract class OgerDbStruct {
   /**
   * Add missing tables and columns to the database.
   * @param $newStruct Array with the new database structure.
+  * @param $oldStruct Optional array with the new database structure.
+  *        If not present it is located from the associated database.
   */
-  public function addStruct($newStruct) {
+  public function addStruct($newStruct, $oldStruct = null) {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
-    $oldStruct = $this->getDbStruct();
+    if (!$oldStruct) {
+      $oldStruct = $this->getDbStruct();
+    }
 
     foreach ($newStruct["__TABLES__"] as $newTableKey => $newTableDef) {
 
@@ -190,6 +194,7 @@ abstract class OgerDbStruct {
             $this->addColumn($newColumnDef);
           }
         }  // eo column loop
+        // FIXME indices !!!
       }
 
     }  // eo table loop
@@ -239,7 +244,7 @@ abstract class OgerDbStruct {
   *        The columns array is passed per reference so
   *        the columns are ordered in place and you
   *        dont need the return value.
-  * @return Ordered array with the column definition.
+  * @return Ordered array with the column definitions.
   */
   abstract public function orderTableColumns(&$columns);
 
@@ -261,6 +266,17 @@ abstract class OgerDbStruct {
 
 
   /**
+  * Force order of index columns.
+  * @param columns Array with the column definitions.
+  *        The columns array is passed per reference so
+  *        the columns are ordered in place and you
+  *        dont need the return value.
+  * @return Ordered array with the column definitions.
+  */
+  abstract public function orderIndexColumns(&$columns);
+
+
+  /**
   * Create an add column statement.
   * @param $columnDef Array with the column definition.
   * @return The SQL statement for adding a column.
@@ -271,72 +287,64 @@ abstract class OgerDbStruct {
   /**
   * Update existing tables and columns and add missing one.
   * @param $newStruct Array with the new database structure.
+  * @param $oldStruct Optional array with the new database structure.
+  *        If not present it is located from the associated database.
   */
-  public function updateStruct($newStruct) {
+  public function updateStruct($newStruct, $oldStruct = null) {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
     // get old structure before adding missing parts
-    // because we dont have to update that
-    $oldStruct = $this->getDbStruct();
+    // because we dont have to refresh that
+    if (!$oldStruct) {
+      $oldStruct = $this->getDbStruct();
+    }
 
     // add mising tables and columns
-    $this->addStruct($newStruct);
+    $this->addStruct($newStruct, $oldStruct);
 
-    // update old table if exits
-    foreach ($newStruct["__TABLES__"] as $newTableKey => $newTableDef) {
-      $oldTableDef = $oldStruct["__TABLES__"][$newTableKey];
-      if ($oldTableDef) {
-        $this->updateTable($oldTableDef, $newTableDef);
-      }
-    }  // eo table loop
+    // refresh existing tables and columns
+    $this->refreshStruct($newStruct, $oldStruct);
 
   }  // eo update struc
 
 
   /**
-  * Update an existing table.
-  * @param $oldTableDef Array with the new table structure.
+  * Update an existing table and add missing columns.
   * @param $newTableDef Array with the new table structure.
+  * @param $oldTableDef Array with the new table structure.
   */
-  public function updateTable($oldTableDef, $newTableDef) {
+  public function updateTable($newTableDef, $oldTableDef) {
 
-    // update table defaults
-    $stmt = $this->tableDefUpdateStmt($oldTableDef, $newTableDef);
-    if ($stmt) {
-      $this->log(static::LOG_DEBUG, $stmt);
-      if (!$this->getOpt("dryrun")) {
-        $pstmt = $this->conn->prepare($stmt);
-        $pstmt->execute();
-      }
-    }
+    $this->refreshTable($newTableDef, $oldTableDef);
 
-    // update old columns if exist
+    // add missing columns
     foreach ($newTableDef["__COLUMNS__"] as $newColumnKey => $newColumnDef) {
-      $oldColumnDef = $oldTableDef["__COLUMNS__"][$newColumnKey];
-      if ($oldColumnDef) {
-        $this->updateColumn($oldColumnDef, $newColumnDef);
+      if (!$oldTableDef["__COLUMNS__"][$newColumnKey]) {
+        $this->addColumn($newColumnDef);
       }
     }
+
+    // FIXME indices
 
   }  // eo update table
 
 
   /**
   * Create an alter table statement for table defaults.
-  * @param $oldTableDef Array with the new table structure.
   * @param $newTableDef Array with the new table structure.
+  * @param $oldTableDef Array with the new table structure.
   */
-  abstract public function tableDefUpdateStmt($oldTableDef, $newTableDef);
+  abstract public function tableDefUpdateStmt($newTableDef, $oldTableDef);
 
 
   /**
-  * Update an existing column.
-  * @param $oldColumnDef Array with the new column structure.
+  * Refresh an existing column.
   * @param $newColumnDef Array with the new column structure.
+  * @param $oldColumnDef Array with the new column structure.
   */
-  public function updateColumn($oldColumnDef, $newColumnDef) {
-    $stmt = $this->columnDefUpdateStmt($oldColumnDef, $newColumnDef);
+  public function refreshColumn($newColumnDef, $oldColumnDef) {
+    $stmt = $this->columnDefUpdateStmt($newColumnDef, $oldColumnDef);
     if ($stmt) {
       $this->log(static::LOG_DEBUG, $stmt);
       if (!$this->getOpt("dryrun")) {
@@ -349,10 +357,68 @@ abstract class OgerDbStruct {
 
   /**
   * Create an alter table statement to alter a column.
-  * @param $oldColumnDef Array with the new column structure.
   * @param $newColumnDef Array with the new column structure.
+  * @param $oldColumnDef Array with the new column structure.
   */
-  abstract public function columnDefUpdateStmt($oldColumnDef, $newColumnDef);
+  abstract public function columnDefUpdateStmt($newColumnDef, $oldColumnDef);
+
+
+  /**
+  * Refresh only existing tables and columns.
+  * @param $newStruct Array with the new database structure.
+  * @param $oldStruct Optional array with the new database structure.
+  *        If not present it is located from the associated database.
+  */
+  public function refreshStruct($newStruct, $oldStruct = null) {
+
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+
+    // get old structure before adding missing parts
+    // because we dont have to update that
+    if (!$oldStruct) {
+      $oldStruct = $this->getDbStruct();
+    }
+
+    // update old table if exits
+    foreach ($newStruct["__TABLES__"] as $newTableKey => $newTableDef) {
+      $oldTableDef = $oldStruct["__TABLES__"][$newTableKey];
+      if ($oldTableDef) {
+        $this->refreshTable($newTableDef, $oldTableDef);
+      }
+    }  // eo table loop
+
+  }  // eo refresh struc
+
+
+  /**
+  * Refresh an existing table and refresh existing columns.
+  * @param $newTableDef Array with the new table structure.
+  * @param $oldTableDef Array with the new table structure.
+  */
+  public function refreshTable($newTableDef, $oldTableDef) {
+
+    // update table defaults
+    $stmt = $this->tableDefUpdateStmt($newTableDef, $oldTableDef);
+    if ($stmt) {
+      $this->log(static::LOG_DEBUG, $stmt);
+      if (!$this->getOpt("dryrun")) {
+        $pstmt = $this->conn->prepare($stmt);
+        $pstmt->execute();
+      }
+    }
+
+    // update existing columns
+    foreach ($newTableDef["__COLUMNS__"] as $newColumnKey => $newColumnDef) {
+      $oldColumnDef = $oldTableDef["__COLUMNS__"][$newColumnKey];
+      if ($oldColumnDef) {
+        $this->refreshColumn($newColumnDef, $oldColumnDef);
+      }
+    }
+
+    // FIXME indices
+
+  }  // eo refresh table
+
 
 
 
