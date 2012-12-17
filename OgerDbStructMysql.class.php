@@ -65,8 +65,8 @@ class OgerDbStructMysql extends OgerDbStruct {
     $pstmt = $this->conn->prepare("
         SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME
           FROM INFORMATION_SCHEMA.SCHEMATA
-          WHERE INFORMATION_SCHEMA.SCHEMATA.CATALOG_NAME=:catalogName AND
-                INFORMATION_SCHEMA.SCHEMATA.SCHEMA_NAME=:dbName
+          WHERE CATALOG_NAME=:catalogName AND
+                SCHEMA_NAME=:dbName
         ");
     $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName));
     $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
@@ -90,8 +90,8 @@ class OgerDbStructMysql extends OgerDbStruct {
     $pstmt = $this->conn->prepare("
         SELECT TABLE_NAME,
           FROM INFORMATION_SCHEMA.TABLES
-          WHERE INFORMATION_SCHEMA.TABLES.TABLE_CATALOG=:catalogName AND
-                INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA=:dbName
+          WHERE TABLE_CATALOG=:catalogName AND
+                TABLE_SCHEMA=:dbName
         ");
     $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName));
     $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
@@ -122,9 +122,9 @@ class OgerDbStructMysql extends OgerDbStruct {
     $pstmt = $this->conn->prepare("
         SELECT TABLE_NAME, ENGINE, TABLE_COLLATION, TABLE_COMMENT,
           FROM INFORMATION_SCHEMA.TABLES
-          WHERE INFORMATION_SCHEMA.TABLES.TABLE_CATALOG=:catalogName AND
-                INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA=:dbName AND
-                INFORMATION_SCHEMA.TABLES.TABLE_NAME=:tableName
+          WHERE TABLE_CATALOG=:catalogName AND
+                TABLE_SCHEMA=:dbName AND
+                TABLES.TABLE_NAME=:tableName
         ");
     $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
     $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
@@ -158,9 +158,9 @@ class OgerDbStructMysql extends OgerDbStruct {
                NUMERIC_PRECISION, NUMERIC_SCALE,
                COLUMN_KEY, EXTRA
           FROM INFORMATION_SCHEMA.COLUMNS
-          WHERE INFORMATION_SCHEMA.COLUMNS.TABLE_CATALOG=:catalogName AND
-                INFORMATION_SCHEMA.COLUMNS.TABLE_SCHEMA=:dbName AND
-                INFORMATION_SCHEMA.COLUMNS.TABLE_NAME=:tableName
+          WHERE TABLE_CATALOG=:catalogName AND
+                TABLE_SCHEMA=:dbName AND
+                TABLE_NAME=:tableName
           ORDER BY ORDINAL_POSITION
         ");
 
@@ -186,9 +186,9 @@ class OgerDbStructMysql extends OgerDbStruct {
     $pstmt = $this->conn->prepare("
         SELECT INDEX_NAME, SEQ_IN_INDEX AS ORDINAL_POSITION, COLUMN_NAME,	NON_UNIQUE
           FROM INFORMATION_SCHEMA.STATISTICS
-          WHERE INFORMATION_SCHEMA.STATISTICS.TABLE_CATALOG=:catalogName AND
-                INFORMATION_SCHEMA.STATISTICS.TABLE_SCHEMA=:dbName AND
-                INFORMATION_SCHEMA.STATISTICS.TABLE_NAME=:tableName
+          WHERE TABLE_CATALOG=:catalogName AND
+                TABLE_SCHEMA=:dbName AND
+                TABLE_NAME=:tableName
           ORDER BY INDEX_NAME, ORDINAL_POSITION
         ");
     $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
@@ -225,7 +225,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
     // ---------------
-    // get constraints info
+    // get foreign keys info
 
     // the TABLE_CONSTRAINTS contains only constraint names,
     // so we use KEY_COLUMN_USAGE this time
@@ -240,20 +240,20 @@ class OgerDbStructMysql extends OgerDbStruct {
           ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION
         ");
     $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
-    $constraintRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $foreignRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
 
-    foreach ($constraintRecords as $constraintRecord) {
+    foreach ($foreignRecords as $foreignRecord) {
 
-      $constraintName = $indexRecord["CONSTRAINT_NAME"];
-      $constraintKey = strtolower($constraintName);
+      $foreignName = $indexRecord["CONSTRAINT_NAME"];
+      $foreignKey = strtolower($foreignName);
 
 
-      $struct["__CONSTRAINT_NAMES__"][$constraintKey] = $constraintName;
+      $struct["__FOREIGN_KEY_NAMES__"][$foreignKey] = $foreignName;
 
       // the meta info is taken from the last entry info which overwrites the prevous meta info
-      //$struct["__CONSTRAINTS__"][$constraintKey]["__CONSTRAINT_META__"]["CONSTRAINT_NAME"] = $constraintName;
-      //$struct["__CONSTRAINTS__"][$constraintKey]["__CONSTRAINT_META__"]["INDEX_KEY_TYPE"] = $indexType;
+      //$struct["__FOREIGN_KEYS__"][$foreignKey]["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"] = $foreignName;
+      //$struct["__FOREIGN_KEYS__"][$foreignKey]["__FOREIGN_KEY_META__"]["INDEX_KEY_TYPE"] = $indexType;
 
       /* see <http://stackoverflow.com/questions/953035/multiple-column-foreign-key-in-mysql>
        * CREATE TABLE MyReferencingTable AS (
@@ -269,10 +269,16 @@ class OgerDbStructMysql extends OgerDbStruct {
           InnoDB enforces foreign keys, MyISAM does not. (The syntax is parsed but ignored)
       */
 
-      // constraints
+      /*
+       * ALTER TABLE `testtab4` ADD FOREIGN KEY ( `id1` ) REFERENCES `test`.`testtab1` (
+          `id1`
+          ) ON DELETE RESTRICT ON UPDATE RESTRICT ;
+      */
+
+      // foreign keys
       // I could not find anything that could I use as uniqe key, so add to array without key
-      //$constraintColumnKey = strtolower($constraintRecord["CONSTRAINT_NAME"]);
-      $struct["__CONSTRAINTS__"][$constraintKey][] = $constraintRecord;
+      //$foreignColumnKey = strtolower($foreignRecord["CONSTRAINT_NAME"]);
+      $struct["__FOREIGN_KEYS__"][$foreignKey][] = $foreignRecord;
 
     }  // eo constraint loop
 
@@ -301,7 +307,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo column loop
 
     // indices
-    if (!$tops["no-indices"]) {
+    if (!$opts["noIndices"]) {
       if ($tableDef["__INDICES__"]) {
         foreach ($tableDef["__INDICES__"] as $indexKey => $indexDef) {
           $stmt .= $delim . $this->indexDefStmt($indexDef);
@@ -309,14 +315,14 @@ class OgerDbStructMysql extends OgerDbStruct {
       }  // eo index loop
     }  // eo include indices
 
-    // constraints
-    if (!$tops["no-constraints"]) {
-      if ($tableDef["__CONSTRAINTS__"]) {
-        foreach ($tableDef["__CONSTRAINTS__"] as $constraintKey => $constraintDef) {
+    // foreign keys
+    if (!$opts["noConstraints"]) {
+      if ($tableDef["__FOREIGN_KEYS__"]) {
+        foreach ($tableDef["__FOREIGN_KEYS__"] as $foreignKey => $foreignDef) {
           // FIXME $stmt .= $delim . $this->indexDefStmt($indexDef);
         }
       }  // eo constraint loop
-    }  // eo include constraints
+    }  // eo include foreign keys
 
     $stmt .= "\n)";
 
@@ -457,12 +463,13 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an add column statement.
   * @see OgerDbStruct::columnDefAddStmt().
   */
-  public function columnDefAddStmt($columnDef) {
+  public function columnDefAddStmt($columnDef, $opts) {
 
     $stmt = "ALTER TABLE " .
             $this->quoteName($columnDef["TABLE_NAME"]) .
             " ADD COLUMN " .
-            $this->columnDefStmt($columnDef);
+            $this->columnDefStmt($columnDef)
+            ($opts["afterColumnName"] ? " AFTER {$opts["afterColumnName"]}" : " FIRST");
 
     return $stmt;
   }  // eo add column
