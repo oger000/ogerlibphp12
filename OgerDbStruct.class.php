@@ -20,7 +20,7 @@ abstract class OgerDbStruct {
   protected $driverName;  ///< Driver name.
   protected $log;  ///< Log messages buffer.
 
-  protected $opts = array();
+  protected $params = array();
 
   protected $quoteNamBegin = '"';
   protected $quoteNamEnd = '"';
@@ -60,26 +60,34 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Set option.
-  * @param $name Option name.
+  * Set parameter.
+  * @param $name Parameter name.
   * Valid parameter names are: dryrun, loglevel.
-  * @param $value New option value.
-  * @return Old option value.
+  * @param $value New parameter value.
+  * @return Old parameter value.
   */
-  public function setOpt($name, $value) {
-    $ret = $this->getOpt($name);
-    $this->opts[$name] = $value;
+  public function setParam($name, $value) {
+    $ret = $this->getParam($name);
+    $this->params[$name] = $value;
     return $ret;
-  }  // eo set opt
+  }  // eo set param
 
   /**
-  * Get option.
-  * @param $name Option name.
-  * @return Old option value.
+  * Get parameter.
+  * @param $name Parameter name.
+  * @return Old parameter value.
   */
-  public function getOpt($name) {
-    return $this->opts[$name];
-  }  // eo get opt
+  public function getParam($name) {
+    return $this->params[$name];
+  }  // eo get param
+
+  /**
+  * Get all parameters.
+  * @return All parameter names and values.
+  */
+  public function getParams() {
+    return $this->params;
+  }  // eo get params
 
 
   /**
@@ -88,7 +96,7 @@ abstract class OgerDbStruct {
   * @param $text Text added to the log buffer.
   */
   public function log($msgLogLevel, $text) {
-    if ($msgLogLevel <= $this->getOpt("loglevel")) {
+    if ($msgLogLevel <= $this->getParam("log-level")) {
       $this->addLog($text);
     }
   }  // eo add log for log level
@@ -170,12 +178,20 @@ abstract class OgerDbStruct {
 
 
   /**
+  * Get the database structure for one table.
+  * @param $tableName Name of the table for which we want to get the structure.
+  * @return Array with table structure.
+  */
+  abstract public function getTableStruct($tablename);
+
+
+  /**
   * Add missing tables and columns to the database.
   * @param $newStruct Array with the new database structure.
   * @param $oldStruct Optional array with the new database structure.
   *        If not present it is located from the associated database.
   */
-  public function addStruct($newStruct, $oldStruct = null) {
+  public function addDbStruct($newStruct, $oldStruct = null) {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
@@ -186,30 +202,41 @@ abstract class OgerDbStruct {
     foreach ($newStruct["__TABLES__"] as $newTableKey => $newTableDef) {
 
       if (!$oldStruct["__TABLES__"][$newTableKey]) {
-        $this->addTable($newTableDef);
+        $this->addTable($newTableDef, $array("no-constraints" => true));
       }
       else {
         foreach ($newTableDef["__COLUMNS__"] as $newColumnKey => $newColumnDef) {
           if (!$oldStruct["__TABLES__"][$newTableKey]["__COLUMNS__"][$newColumnKey]) {
-            $this->addColumn($newColumnDef);
+            $this->addTableColumn($newColumnDef);
           }
         }  // eo column loop
-        // FIXME indices !!!
-      }
+        foreach ($newTableDef["__INDICES__"] as $newIndexKey => $newIndexDef) {
+          if (!$oldStruct["__TABLES__"][$newTableKey]["__INDICES__"][$newIndexKey]) {
+            $this->addTableIndex($newIndexDef);
+          }
+        }  // eo index loop
+        foreach ($newTableDef["__CONSTRAINTS__"] as $newConstraintKey => $newConstraintDef) {
+          if (!$oldStruct["__TABLES__"][$newTableKey]["__CONSTRAINTS__"][$newConstraintKey]) {
+            // FIXME constraint $this->addTableIndex($newIndexDef);
+          }
+        }  // eo constraint loop
+      }  // eo existing table
 
     }  // eo table loop
 
-  }  // eo add struc
+  }  // eo add db struc
 
 
   /**
   * Add a table to the database structure.
   * @param $tableDef Array with the table definition.
+  * @param $opts Optional option array. Key is option.
+  *        Valid options: no-indices, no-constraints.
   */
-  public function addTable($tableDef) {
-    $stmt = $this->tableDefCreateStmt($tableDef);
+  public function addTable($tableDef, $opts) {
+    $stmt = $this->tableDefCreateStmt($tableDef, $opts);
     $this->log(static::LOG_DEBUG, $stmt);
-    if (!$this->getOpt("dryrun")) {
+    if (!$this->getParam("dry-run")) {
       $pstmt = $this->conn->prepare($stmt);
       $pstmt->execute();
     }
@@ -220,10 +247,10 @@ abstract class OgerDbStruct {
   * Add a column to a table structure.
   * @param $columnDef Array with the table definition.
   */
-  public function addColumn($columnDef) {
+  public function addTableColumn($columnDef) {
     $stmt = $this->columnDefAddStmt($columnDef);
     $this->log(static::LOG_DEBUG, $stmt);
-    if (!$this->getOpt("dryrun")) {
+    if (!$this->getParam("dry-run")) {
       $pstmt = $this->conn->prepare($stmt);
       $pstmt->execute();
     }
@@ -290,7 +317,7 @@ abstract class OgerDbStruct {
   * @param $oldStruct Optional array with the new database structure.
   *        If not present it is located from the associated database.
   */
-  public function updateStruct($newStruct, $oldStruct = null) {
+  public function updateDbStruct($newStruct, $oldStruct = null) {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
@@ -301,7 +328,7 @@ abstract class OgerDbStruct {
     }
 
     // add mising tables and columns
-    $this->addStruct($newStruct, $oldStruct);
+    $this->addDbStruct($newStruct, $oldStruct);
 
     // refresh existing tables and columns
     $this->refreshStruct($newStruct, $oldStruct);
@@ -321,7 +348,7 @@ abstract class OgerDbStruct {
     // add missing columns
     foreach ($newTableDef["__COLUMNS__"] as $newColumnKey => $newColumnDef) {
       if (!$oldTableDef["__COLUMNS__"][$newColumnKey]) {
-        $this->addColumn($newColumnDef);
+        $this->addTableColumn($newColumnDef);
       }
     }
 
@@ -347,7 +374,7 @@ abstract class OgerDbStruct {
     $stmt = $this->columnDefUpdateStmt($newColumnDef, $oldColumnDef);
     if ($stmt) {
       $this->log(static::LOG_DEBUG, $stmt);
-      if (!$this->getOpt("dryrun")) {
+      if (!$this->getParam("dry-run")) {
         $pstmt = $this->conn->prepare($stmt);
         $pstmt->execute();
       }
@@ -401,7 +428,7 @@ abstract class OgerDbStruct {
     $stmt = $this->tableDefUpdateStmt($newTableDef, $oldTableDef);
     if ($stmt) {
       $this->log(static::LOG_DEBUG, $stmt);
-      if (!$this->getOpt("dryrun")) {
+      if (!$this->getParam("dry-run")) {
         $pstmt = $this->conn->prepare($stmt);
         $pstmt->execute();
       }

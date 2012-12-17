@@ -17,6 +17,8 @@ class OgerDbStructMysql extends OgerDbStruct {
   protected $quoteNamBegin = '`';
   protected $quoteNamEnd = '`';
 
+  private $defCatalogName = "def";
+
 
   /**
    * @see OgerDbStruct::__construct().
@@ -58,7 +60,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     // ------------------
     // get schema info
 
-    $defCatalogName = "def";
+    $this->defCatalogName = "def";
 
     $pstmt = $this->conn->prepare("
         SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME
@@ -66,12 +68,12 @@ class OgerDbStructMysql extends OgerDbStruct {
           WHERE INFORMATION_SCHEMA.SCHEMATA.CATALOG_NAME=:catalogName AND
                 INFORMATION_SCHEMA.SCHEMATA.SCHEMA_NAME=:dbName
         ");
-    $pstmt->execute(array("catalogName" => $defCatalogName, "dbName" => $this->dbName));
+    $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName));
     $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
 
     if (count($schemaRecords) > 1) {
-      throw new Exception("More than one schema found with name :{$this->dbName}");
+      throw new Exception("More than one schema found for name {$this->dbName}.");
     }
 
     // return silently if no schema found
@@ -86,12 +88,12 @@ class OgerDbStructMysql extends OgerDbStruct {
     // get tables info
 
     $pstmt = $this->conn->prepare("
-        SELECT TABLE_NAME, TABLE_COLLATION
+        SELECT TABLE_NAME,
           FROM INFORMATION_SCHEMA.TABLES
           WHERE INFORMATION_SCHEMA.TABLES.TABLE_CATALOG=:catalogName AND
                 INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA=:dbName
         ");
-    $pstmt->execute(array("catalogName" => $defCatalogName, "dbName" => $this->dbName));
+    $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName));
     $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
 
@@ -101,86 +103,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       $tableKey = strtolower($tableName);
 
       $struct["__TABLE_NAMES__"][$tableKey] = $tableName;
-      $struct["__TABLES__"][$tableKey]["__TABLE_META__"] = $tableRecord;
-
-
-      // -------------------
-      // get columns info
-      // COLUMN_KEY is short index info (PRI, MUL, ...)
-      // most important is COLUMN_TYPE - e.g. int(11)
-
-      $pstmt = $this->conn->prepare("
-          SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION,
-                 COLUMN_TYPE, DATA_TYPE,
-                 COLUMN_DEFAULT, IS_NULLABLE,
-                 CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, CHARACTER_SET_NAME, COLLATION_NAME,
-                 NUMERIC_PRECISION, NUMERIC_SCALE,
-                 COLUMN_KEY, EXTRA
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE INFORMATION_SCHEMA.COLUMNS.TABLE_CATALOG=:catalogName AND
-                  INFORMATION_SCHEMA.COLUMNS.TABLE_SCHEMA=:dbName AND
-                  INFORMATION_SCHEMA.COLUMNS.TABLE_NAME=:tableName
-            ORDER BY ORDINAL_POSITION
-          ");
-
-      $pstmt->execute(array("catalogName" => $defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
-      $columnRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
-      $pstmt->closeCursor();
-
-      foreach ($columnRecords as $columnRecord) {
-
-        $columnName = $columnRecord["COLUMN_NAME"];
-        $columnKey = strtolower($columnName);
-
-        $struct["__TABLES__"][$tableKey]["__COLUMN_NAMES__"][$columnKey] = $columnName;
-        $struct["__TABLES__"][$tableKey]["__COLUMNS__"][$columnKey] = $columnRecord;
-
-      }  // eo column loop
-
-
-      // ---------------
-      // get key info
-
-      // the KEY_COLUMN_USAGE misses info like unique, nullable, etc so wie use STATISTICS for now
-      $pstmt = $this->conn->prepare("
-          SELECT INDEX_NAME, SEQ_IN_INDEX AS ORDINAL_POSITION, COLUMN_NAME,	NON_UNIQUE
-            FROM INFORMATION_SCHEMA.STATISTICS
-            WHERE INFORMATION_SCHEMA.STATISTICS.TABLE_CATALOG=:catalogName AND
-                  INFORMATION_SCHEMA.STATISTICS.TABLE_SCHEMA=:dbName AND
-                  INFORMATION_SCHEMA.STATISTICS.TABLE_NAME=:tableName
-            ORDER BY INDEX_NAME, ORDINAL_POSITION
-          ");
-      $pstmt->execute(array("catalogName" => $defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
-      $indexRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
-      $pstmt->closeCursor();
-
-      foreach ($indexRecords as $indexRecord) {
-
-        $indexName = $indexRecord["INDEX_NAME"];
-        $indexKey = strtolower($indexName);
-
-        $indexRecord["UNIQUE"] = ($indexRecord["NON_UNIQUE"] ? "0" : "1");
-
-        // detect index type
-        $indexType = "";
-        if ($indexName == "PRIMARY") {
-          $indexType = "PRIMARY";
-        }
-        elseif (!$indexRecord["NON_UNIQUE"]) {
-          $indexType = "UNIQUE";
-        }
-
-        $struct["__TABLES__"][$tableKey]["__INDEX_NAMES__"][$indexKey] = $indexName;
-
-        // the meta info is taken from the last column info which overwrites the prevous meta info
-        $struct["__TABLES__"][$tableKey]["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_NAME"] = $indexName;
-        $struct["__TABLES__"][$tableKey]["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_KEY_TYPE"] = $indexType;
-
-        // index columns
-        $indexColumnKey = strtolower($indexRecord["COLUMN_NAME"]);
-        $struct["__TABLES__"][$tableKey]["__INDICES__"][$indexKey]["__INDEX_COLUMNS__"][$indexColumnKey] = $indexRecord;
-
-      }  // eo index loop
+      $struct["__TABLES__"][$tableKey] = $this->getTableStruct($tableName);
 
     }  // eo table loop
 
@@ -189,10 +112,180 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
   /**
-  * Create an add table statement.
-  * @see OgerDbStruct::tableDefCreateStmt().
+  * Get table structure.
+  * @see OgerDbStruct::getTableStruct().
   */
-  public function tableDefCreateStmt($tableDef) {
+  public function getTableStruct($tableName) {
+
+    $struct = array();
+
+    $pstmt = $this->conn->prepare("
+        SELECT TABLE_NAME, ENGINE, TABLE_COLLATION, TABLE_COMMENT,
+          FROM INFORMATION_SCHEMA.TABLES
+          WHERE INFORMATION_SCHEMA.TABLES.TABLE_CATALOG=:catalogName AND
+                INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA=:dbName AND
+                INFORMATION_SCHEMA.TABLES.TABLE_NAME=:tableName
+        ");
+    $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
+    $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+
+    if (count($tableRecords) > 1)
+      throw new Exception("More than one table schema found for table name {$tableName}.");
+    }
+
+    if (count($tableRecords) < 1)
+      return $struct;
+    }
+
+
+    $tableRecord = reset($tableRecords)
+    $tableKey = strtolower($tableName);
+
+    $struct["__TABLE_META__"] = $tableRecord;
+
+
+    // -------------------
+    // get columns info
+    // COLUMN_KEY is short index info (PRI, MUL, ...)
+    // most important is COLUMN_TYPE - e.g. int(11)
+
+    $pstmt = $this->conn->prepare("
+        SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION,
+               COLUMN_TYPE, DATA_TYPE,
+               COLUMN_DEFAULT, IS_NULLABLE,
+               CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, CHARACTER_SET_NAME, COLLATION_NAME,
+               NUMERIC_PRECISION, NUMERIC_SCALE,
+               COLUMN_KEY, EXTRA
+          FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE INFORMATION_SCHEMA.COLUMNS.TABLE_CATALOG=:catalogName AND
+                INFORMATION_SCHEMA.COLUMNS.TABLE_SCHEMA=:dbName AND
+                INFORMATION_SCHEMA.COLUMNS.TABLE_NAME=:tableName
+          ORDER BY ORDINAL_POSITION
+        ");
+
+    $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
+    $columnRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+
+    foreach ($columnRecords as $columnRecord) {
+
+      $columnName = $columnRecord["COLUMN_NAME"];
+      $columnKey = strtolower($columnName);
+
+      $struct["__COLUMN_NAMES__"][$columnKey] = $columnName;
+      $struct["__COLUMNS__"][$columnKey] = $columnRecord;
+
+    }  // eo column loop
+
+
+    // ---------------
+    // get key info
+
+    // the KEY_COLUMN_USAGE misses info like unique, nullable, etc so wie use STATISTICS for now
+    $pstmt = $this->conn->prepare("
+        SELECT INDEX_NAME, SEQ_IN_INDEX AS ORDINAL_POSITION, COLUMN_NAME,	NON_UNIQUE
+          FROM INFORMATION_SCHEMA.STATISTICS
+          WHERE INFORMATION_SCHEMA.STATISTICS.TABLE_CATALOG=:catalogName AND
+                INFORMATION_SCHEMA.STATISTICS.TABLE_SCHEMA=:dbName AND
+                INFORMATION_SCHEMA.STATISTICS.TABLE_NAME=:tableName
+          ORDER BY INDEX_NAME, ORDINAL_POSITION
+        ");
+    $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
+    $indexRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+
+    foreach ($indexRecords as $indexRecord) {
+
+      $indexName = $indexRecord["INDEX_NAME"];
+      $indexKey = strtolower($indexName);
+
+      $indexRecord["UNIQUE"] = ($indexRecord["NON_UNIQUE"] ? "0" : "1");
+
+      // detect index type
+      $indexType = "";
+      if ($indexName == "PRIMARY") {
+        $indexType = "PRIMARY";
+      }
+      elseif (!$indexRecord["NON_UNIQUE"]) {
+        $indexType = "UNIQUE";
+      }
+
+      $struct["__INDEX_NAMES__"][$indexKey] = $indexName;
+
+      // the meta info is taken from the last column info which overwrites the prevous meta info
+      $struct["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_NAME"] = $indexName;
+      $struct["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_KEY_TYPE"] = $indexType;
+
+      // index columns
+      $indexColumnKey = strtolower($indexRecord["COLUMN_NAME"]);
+      $struct["__INDICES__"][$indexKey]["__INDEX_COLUMNS__"][$indexColumnKey] = $indexRecord;
+
+    }  // eo index loop
+
+
+    // ---------------
+    // get constraints info
+
+    // the TABLE_CONSTRAINTS contains only constraint names,
+    // so we use KEY_COLUMN_USAGE this time
+    $pstmt = $this->conn->prepare("
+        SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT,
+               REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+          WHERE TABLE_CATALOG=:catalogName AND
+                TABLE_SCHEMA=:dbName AND
+                TABLE_NAME=:tableName AND
+                REFERENCED_TABLE_NAME NOT IS NULL
+          ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION
+        ");
+    $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
+    $constraintRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+
+    foreach ($constraintRecords as $constraintRecord) {
+
+      $constraintName = $indexRecord["CONSTRAINT_NAME"];
+      $constraintKey = strtolower($constraintName);
+
+
+      $struct["__CONSTRAINT_NAMES__"][$constraintKey] = $constraintName;
+
+      // the meta info is taken from the last entry info which overwrites the prevous meta info
+      //$struct["__CONSTRAINTS__"][$constraintKey]["__CONSTRAINT_META__"]["CONSTRAINT_NAME"] = $constraintName;
+      //$struct["__CONSTRAINTS__"][$constraintKey]["__CONSTRAINT_META__"]["INDEX_KEY_TYPE"] = $indexType;
+
+      /* see <http://stackoverflow.com/questions/953035/multiple-column-foreign-key-in-mysql>
+       * CREATE TABLE MyReferencingTable AS (
+           [COLUMN DEFINITIONS]
+           refcol1 INT NOT NULL,
+           rofcol2 INT NOT NULL,
+           CONSTRAINT fk_mrt_ot FOREIGN KEY (refcol1, refcol2)
+                                REFERENCES OtherTable(col1, col2)
+          ) ENGINE=InnoDB;
+
+          MySQL requires foreign keys to be indexed, hence the index on the referencing columns
+          Use of the constraint syntax enables you to name a constraint, making it easier to alter and drop at a later time if needed.
+          InnoDB enforces foreign keys, MyISAM does not. (The syntax is parsed but ignored)
+      */
+
+      // constraints
+      // I could not find anything that could I use as uniqe key, so add to array without key
+      //$constraintColumnKey = strtolower($constraintRecord["CONSTRAINT_NAME"]);
+      $struct["__CONSTRAINTS__"][$constraintKey][] = $constraintRecord;
+
+    }  // eo constraint loop
+
+    $return struct;
+  }  // eo get table struc
+
+
+  /**
+  * Create an add table statement.
+  * @see OgerDbStruct::tableDefCreateStmt() and
+  *      OgerDbStruct::addTable() for option description.
+  */
+  public function tableDefCreateStmt($tableDef, $opts) {
 
     $tableMeta = $tableDef["__TABLE_META__"];
     $tableName = $this->quoteName($tableMeta["TABLE_NAME"]);
@@ -208,12 +301,22 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo column loop
 
     // indices
-    if ($tableDef["__INDICES__"]) {
-      foreach ($tableDef["__INDICES__"] as $indexKey => $indexDef) {
-        $stmt .= $delim . $this->indexDefStmt($indexDef);
-      }
+    if (!$tops["no-indices"]) {
+      if ($tableDef["__INDICES__"]) {
+        foreach ($tableDef["__INDICES__"] as $indexKey => $indexDef) {
+          $stmt .= $delim . $this->indexDefStmt($indexDef);
+        }
+      }  // eo index loop
+    }  // eo include indices
 
-    }  // eo index loop
+    // constraints
+    if (!$tops["no-constraints"]) {
+      if ($tableDef["__CONSTRAINTS__"]) {
+        foreach ($tableDef["__CONSTRAINTS__"] as $constraintKey => $constraintDef) {
+          // FIXME $stmt .= $delim . $this->indexDefStmt($indexDef);
+        }
+      }  // eo constraint loop
+    }  // eo include constraints
 
     $stmt .= "\n)";
 
@@ -224,6 +327,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     // and does this internally automatically if a collation is given.
     // So we depend on this - provide the collation and omit the charset.
     $stmt .= " DEFAULT" .
+          " ENGINE={$tableMeta['ENGINE']}";
           // " CHARSET={$tableMeta['']}" .  // see note above
           " COLLATE={$tableMeta['TABLE_COLLATION']}";
 
