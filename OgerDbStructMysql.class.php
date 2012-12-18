@@ -294,35 +294,35 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @see OgerDbStruct::tableDefCreateStmt() and
   *      OgerDbStruct::addTable() for option description.
   */
-  public function tableDefCreateStmt($tableDef, $opts) {
+  public function tableDefCreateStmt($tableStruct, $opts) {
 
-    $tableMeta = $tableDef["__TABLE_META__"];
+    $tableMeta = $tableStruct["__TABLE_META__"];
     $tableName = $this->quoteName($tableMeta["TABLE_NAME"]);
     $stmt = "CREATE TABLE $tableName (\n  ";
 
     // force column order
-    $this->orderTableColumns($tableDef["__COLUMNS__"]);
+    $this->orderTableStructColumns($tableStruct["__COLUMNS__"]);
 
     $delim = "";
-    foreach ($tableDef["__COLUMNS__"] as $columnDef) {
-      $stmt .= $delim . $this->columnDefStmt($columnDef);
+    foreach ($tableStruct["__COLUMNS__"] as $columnStruct) {
+      $stmt .= $delim . $this->columnDefStmt($columnStruct);
       $delim = ",\n  ";
     }  // eo column loop
 
     // indices
     if (!$opts["noIndices"]) {
-      if ($tableDef["__INDICES__"]) {
-        foreach ($tableDef["__INDICES__"] as $indexKey => $indexDef) {
-          $stmt .= $delim . $this->indexDefStmt($indexDef);
+      if ($tableStruct["__INDICES__"]) {
+        foreach ($tableStruct["__INDICES__"] as $indexKey => $indexStruct) {
+          $stmt .= $delim . $this->indexDefStmt($indexStruct);
         }
       }  // eo index loop
     }  // eo include indices
 
     // foreign keys
     if (!$opts["noForeignKeys"]) {
-      if ($tableDef["__FOREIGN_KEYS__"]) {
-        foreach ($tableDef["__FOREIGN_KEYS__"] as $fkKey => $fkDef) {
-          $stmt .= $delim . $this->foreignKeyDefStmt($fkDef);
+      if ($tableStruct["__FOREIGN_KEYS__"]) {
+        foreach ($tableStruct["__FOREIGN_KEYS__"] as $fkKey => $fkStruct) {
+          $stmt .= $delim . $this->foreignKeyDefStmt($fkStruct);
         }
       }  // eo constraint loop
     }  // eo include foreign keys
@@ -346,22 +346,22 @@ class OgerDbStructMysql extends OgerDbStruct {
 
   /**
   * Force order of table columns.
-  * @see OgerDbStruct::orderTableColumns().
+  * @see OgerDbStruct::orderTableStructColumns().
   */
-  public function orderTableColumns(&$columns){
+  public function orderTableStructColumns(&$columns){
 
     $tmpCols = array();
 
     // preserve references
-    foreach ($columns as $columnKey => &$columnDef) {
-      $tmpCols[$columnDef["ORDINAL_POSITION"] * 1] = &$columnDef;
+    foreach ($columns as $columnKey => &$columnStruct) {
+      $tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
     }
     ksort($tmpCols);
 
     // assign back to original array
     $columns = array();
-    foreach ($tmpCols as &$columnDef) {
-      $columns[strtolower($columnDef["COLUMN_NAME"])] = &$columnDef;
+    foreach ($tmpCols as &$columnStruct) {
+      $columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
     }
 
     // return per value
@@ -373,18 +373,18 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create a column definition statement.
   * @see OgerDbStruct::columnDefStmt().
   */
-  public function columnDefStmt($columnDef, $opts = array()) {
+  public function columnDefStmt($columnStruct, $opts = array()) {
 
-    $stmt = $this->quoteName($columnDef["COLUMN_NAME"]) .
-            " " . $columnDef["COLUMN_TYPE"] .
-            ($columnDef["COLLATION_NAME"] ? " COLLATE {$columnDef["COLLATION_NAME"]}" : "") .
-            ($columnDef["IS_NULLABLE"] == "NO" ? " NOT NULL" : "") .
-            ($columnDef["EXTRA"] ? " {$columnDef["EXTRA"]}" : "");
+    $stmt = $this->quoteName($columnStruct["COLUMN_NAME"]) .
+            " " . $columnStruct["COLUMN_TYPE"] .
+            ($columnStruct["COLLATION_NAME"] ? " COLLATE {$columnStruct["COLLATION_NAME"]}" : "") .
+            ($columnStruct["IS_NULLABLE"] == "NO" ? " NOT NULL" : "") .
+            ($columnStruct["EXTRA"] ? " {$columnStruct["EXTRA"]}" : "");
 
     // create column default
-    if (!is_null($columnDef["COLUMN_DEFAULT"]) || $columnDef["IS_NULLABLE"] == "YES") {
+    if (!is_null($columnStruct["COLUMN_DEFAULT"]) || $columnStruct["IS_NULLABLE"] == "YES") {
 
-      $default = $columnDef['COLUMN_DEFAULT'];
+      $default = $columnStruct['COLUMN_DEFAULT'];
       if (is_null($default)) {
         $default = "NULL";
       }
@@ -393,11 +393,24 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
       else {
         // quote default value
+        // FIXME quote '
         $default = "'$default'";
       }
 
       $stmt .= " DEFAULT $default";
     }  // eo default
+
+    // if afterColumnName is empty we do nothing (that means the field is appended without position)
+    if ($opts["afterColumnName"]) {
+      // negative numeric values result in inserting on first position
+      if ($opts["afterColumnName"] < 0) {
+        $stmt .= " FIRST";
+      }
+      else {
+        $afterColumnName = $this->quoteName($opts["afterColumnName"]);
+        $stmt .= " AFTER {$afterColumnName}";
+      }
+    }
 
     return $stmt;
   }  // eo column def stmt
@@ -407,16 +420,16 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create a table index statement.
   * @see OgerDbStruct::indexDefStmt().
   */
-  public function indexDefStmt($indexDef) {
+  public function indexDefStmt($indexStruct) {
 
-    $indexName = " " . $this->quoteName($indexDef["__INDEX_META__"]["INDEX_NAME"]);
+    $indexName = " " . $this->quoteName($indexStruct["__INDEX_META__"]["INDEX_NAME"]);
 
     // the primary key has no separate name
-    if ($indexDef["__INDEX_META__"]["INDEX_KEY_TYPE"] == "PRIMARY") {
+    if ($indexStruct["__INDEX_META__"]["INDEX_KEY_TYPE"] == "PRIMARY") {
       $indexName = "";
     }
 
-    $indexKeyType = $indexDef["__INDEX_META__"]["INDEX_KEY_TYPE"];
+    $indexKeyType = $indexStruct["__INDEX_META__"]["INDEX_KEY_TYPE"];
     if ($indexKeyType) {
       $indexKeyType .= " ";
     }
@@ -424,10 +437,10 @@ class OgerDbStructMysql extends OgerDbStruct {
     $stmt .= "{$indexKeyType}KEY{$indexName}";
 
     // force order of columns and extract names
-    $this->orderIndexColumns($indexDef["__INDEX_COLUMNS__"]);
+    $this->orderIndexColumns($indexStruct["__INDEX_COLUMNS__"]);
     $colNames = array();
-    foreach ($indexDef["__INDEX_COLUMNS__"] as $indexColumnDef) {
-      $colNames[] = $this->quoteName($indexColumnDef["COLUMN_NAME"]);
+    foreach ($indexStruct["__INDEX_COLUMNS__"] as $indexColumnStruct) {
+      $colNames[] = $this->quoteName($indexColumnStruct["COLUMN_NAME"]);
     }
 
     // put fields to statement
@@ -446,15 +459,15 @@ class OgerDbStructMysql extends OgerDbStruct {
     $tmpCols = array();
 
     // preserve references
-    foreach ($columns as $columnKey => &$columnDef) {
-      $tmpCols[$columnDef["ORDINAL_POSITION"] * 1] = &$columnDef;
+    foreach ($columns as $columnKey => &$columnStruct) {
+      $tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
     }
     ksort($tmpCols);
 
     // assign back to original array
     $columns = array();
-    foreach ($tmpCols as &$columnDef) {
-      $columns[strtolower($columnDef["COLUMN_NAME"])] = &$columnDef;
+    foreach ($tmpCols as &$columnStruct) {
+      $columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
     }
 
     // return per value
@@ -466,23 +479,12 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an add column statement.
   * @see OgerDbStruct::columnDefAddStmt().
   */
-  public function columnDefAddStmt($columnDef, $opts) {
+  public function columnDefAddStmt($columnStruct, $opts) {
 
     $stmt = "ALTER TABLE " .
-            $this->quoteName($columnDef["TABLE_NAME"]) .
+            $this->quoteName($columnStruct["TABLE_NAME"]) .
             " ADD COLUMN " .
-            $this->columnDefStmt($columnDef);
-
-    // if afterColumnName is empty we do nothing (that means the field is appended without position)
-    if ($opts["afterColumnName"]) {
-      // negative numeric values result in inserting on first position
-      if ($opts["afterColumnName"] < 0) {
-        $stmt .= " FIRST";
-      }
-      else {
-        $stmt .= " AFTER {$opts["afterColumnName"]}";
-      }
-    }
+            $this->columnDefStmt($columnStruct, $opts);
 
     return $stmt;
   }  // eo add column
@@ -492,19 +494,23 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an alter table statement for table defaults.
   * @see OgerDbStruct::columnDefAddStmt().
   */
-  public function tableDefUpdateStmt($newTableDef, $oldTableDef) {
+  public function tableDefUpdateStmt($newTableStruct, $oldTableStruct) {
 
-    $newTableMeta = $newTableDef["__TABLE_META__"];
-    $oldTableMeta = $oldTableDef["__TABLE_META__"];
+    $newTableMeta = $newTableStruct["__TABLE_META__"];
+    $oldTableMeta = $oldTableStruct["__TABLE_META__"];
 
-    if ($newTableMeta["TABLE_COLLATION"] && $newTableMeta["TABLE_COLLATION"] != $oldTableMeta["TABLE_COLLATION"]) {
-      $stmt .= $this->quoteName($oldTableMeta["TABLE_NAME"]) .
-               " COLLATE " . $newTableMeta["TABLE_COLLATION"];
+    if ($newTableMeta["TABLE_COLLATION"] != $oldTableMeta["TABLE_COLLATION"]) {
+      $changed = true;
+    }
+    if ($newTableMeta["ENGINE"] != $oldTableMeta["ENGINE"]) {
+      $changed = true;
     }
 
-    // complete if anything changed
-    if ($stmt) {
-      $stmt = "ALTER TABLE $stmt";
+    if ($changed) {
+      $stmt = "ALTER TABLE " .
+              $this->quoteName($oldTableMeta["TABLE_NAME"]) .
+              " ENGINE " . $newTableMeta["ENGINE"];
+              " COLLATE " . $newTableMeta["TABLE_COLLATION"];
     }
 
     return $stmt;
@@ -515,60 +521,103 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an alter table statement to alter a column.
   * @see OgerDbStruct::columnDefUpdateStmt().
   */
-  public function columnDefUpdateStmt($newColumnDef, $oldColumnDef) {
+  public function columnDefUpdateStmt($newColumnStruct, $oldColumnStruct) {
 
-    if ($newColumnDef["COLUMN_TYPE"] != $oldColumnDef["COLUMN_TYPE"]) {
+    if ($newColumnStruct["COLUMN_TYPE"] != $oldColumnStruct["COLUMN_TYPE"]) {
       $changed = true;
     }
-    if ($newColumnDef["COLLATION_NAME"] && $newColumnDef["COLLATION_NAME"] != $oldColumnDef["COLLATION_NAME"]) {
+    if ($newColumnStruct["COLLATION_NAME"] && $newColumnStruct["COLLATION_NAME"] != $oldColumnStruct["COLLATION_NAME"]) {
       $changed = true;
     }
-    if ($newColumnDef["IS_NULLABLE"] != $oldColumnDef["IS_NULLABLE"]) {
+    if ($newColumnStruct["IS_NULLABLE"] != $oldColumnStruct["IS_NULLABLE"]) {
       $changed = true;
     }
-    if ($newColumnDef["COLUMN_DEFAULT"] != $oldColumnDef["COLUMN_DEFAULT"]) {
+    if ($newColumnStruct["COLUMN_DEFAULT"] != $oldColumnStruct["COLUMN_DEFAULT"]) {
       $changed = true;
     }
-    if ($newColumnDef["EXTRA"] != $oldColumnDef["EXTRA"]) {
+    if ($newColumnStruct["EXTRA"] != $oldColumnStruct["EXTRA"]) {
       $changed = true;
     }
 
     // create change statement
+    // TODO: include AFTER | FIRST position here?
     if ($changed) {
-      $stmt = "ALTER TABLE " . $this->quoteName($oldColumnDef["TABLE_NAME"]) .
-              " CHANGE " . $this->quoteName($oldColumnDef["COLUMN_NAME"]) .
-              " " . $this->columnDefStmt($newColumnDef);
+      $stmt = "ALTER TABLE " . $this->quoteName($oldColumnStruct["TABLE_NAME"]) .
+              " CHANGE COLUMN " . $this->quoteName($oldColumnStruct["COLUMN_NAME"]) .
+              " " . $this->columnDefStmt($newColumnStruct);
     }
 
     return $stmt;
-  }  // eo update table
+  }  // eo update column
 
 
+  /**
+  * Create an alter table statement to alter a index.
+  * @see OgerDbStruct::indexDefUpdateStmt().
+  */
+  public function indexDefUpdateStmt($newIndexStruct, $oldIndexStruct) {
+
+    $newIndexSql = $this->indexDefStmt($newIndexStruct);
+    $oldIndexSql = $this->indexDefStmt($oldIndexStruct);
+
+    $tableName = $this->quoteName($oldIndexStruct["__INDEX_META__"]["TABLE_NAME"]);
+    $indexName = $this->quoteName($oldIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
+
+    // create change statement
+    if ($newIndexSql != $oldIndexStruct) {
+      $stmt = "ALTER TABLE $tableName DROP INDEX $indexName;" .
+              "ALTER TABLE $tableName ADD $newIndexSql";
+    }
+
+    return $stmt;
+  }  // eo update index
+
+
+  /**
+  * Create an alter table statement to alter a foreign key.
+  * @see OgerDbStruct::foreignKeyDefUpdateStmt().
+  */
+  public function foreignKeyDefUpdateStmt($newFkStruct, $oldFkStruct) {
+
+    $newFkSql = $this->foreignKeyDefStmt($newFkStruct);
+    $oldFkSql = $this->foreignKeyDefStmt($oldFkStruct);
+
+    $tableName = $this->quoteName($oldIndexStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
+    $fkName = $this->quoteName($oldIndexStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+
+    // create change statement
+    if ($newFkSql != $oldFkStruct) {
+      $stmt = "ALTER TABLE $tableName DROP FOREIGN KEY $fkName;" .
+              "ALTER TABLE $tableName ADD $newFkSql";
+    }
+
+    return $stmt;
+  }  // eo update index
 
 
   /**
   * Create a table foreign key statement.
   * @see OgerDbStruct::foreignKeyDefStmt().
   */
-  public function foreignKeyDefStmt($fkDef) {
+  public function foreignKeyDefStmt($fkStruct) {
 
-    $fkName = $this->quoteName($fkDef["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+    $fkName = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
 
     $stmt = "CONSTRAINT $fkName";
 
     // force order of columns and extract names
     // we assume that the column order in the reference is the same as in the foreign key
-    $this->orderForeignKeyColumns($fkDef["__FOREIGN_KEY_COLUMNS__"]);
+    $this->orderForeignKeyColumns($fkStruct["__FOREIGN_KEY_COLUMNS__"]);
     $colNames = array();
     $colNamesRef = array();
-    foreach ($fkDef["__FOREIGN_KEY_COLUMNS__"] as $fkColumnDef) {
-      $colNames[] = $this->quoteName($fkColumnDef["COLUMN_NAME"]);
-      $colNamesRef[] = $this->quoteName($fkColumnDef["REFERENCED_COLUMN_NAME"]);
+    foreach ($fkStruct["__FOREIGN_KEY_COLUMNS__"] as $fkColumnStruct) {
+      $colNames[] = $this->quoteName($fkColumnStruct["COLUMN_NAME"]);
+      $colNamesRef[] = $this->quoteName($fkColumnStruct["REFERENCED_COLUMN_NAME"]);
     }
 
     // put fields and reference to statement
     $stmt .= " FOREIGN KEY (" . implode(", ", $colNames) . ")";
-    $refTable = $this->quoteName($fkDef["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_NAME"]);
+    $refTable = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_NAME"]);
     $stmt .= " REFERENCES $refTable (" . implode(", ", $colNamesRef) . ")";
 
     return $stmt;
@@ -584,15 +633,15 @@ class OgerDbStructMysql extends OgerDbStruct {
     $tmpCols = array();
 
     // preserve references
-    foreach ($columns as $columnKey => &$columnDef) {
-      $tmpCols[$columnDef["ORDINAL_POSITION"] * 1] = &$columnDef;
+    foreach ($columns as $columnKey => &$columnStruct) {
+      $tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
     }
     ksort($tmpCols);
 
     // assign back to original array
     $columns = array();
-    foreach ($tmpCols as &$columnDef) {
-      $columns[strtolower($columnDef["COLUMN_NAME"])] = &$columnDef;
+    foreach ($tmpCols as &$columnStruct) {
+      $columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
     }
 
     // return per value
@@ -600,6 +649,59 @@ class OgerDbStructMysql extends OgerDbStruct {
   }  // eo order foreign key columns
 
 
+  /**
+  * Reorder table columns.
+  * @see OgerDbStruct::reorderTableColumns().
+  */
+  public function reorderTableColumns($newTableStruct, $oldTableStruct){
+
+    $this->orderTableStructColumns($newTableStruct["__COLUMNS__"]);
+    $newColNames = array();
+    foreach ($newTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
+      $newColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
+    }
+
+    $this->orderTableStructColumns($oldTableStruct["__COLUMNS__"]);
+    $oldColNames = array();
+    foreach ($oldTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
+      $oldColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
+    }
+
+
+    // remove all column names that are not in both tables
+    // because they do not affect the reordering
+
+    foreach ($newColNames as $colKey => $colStruct) {
+      if (!$oldColNames[$colKey]) {
+        unset($newColNames[$colKey]);
+      }
+    }
+
+    foreach ($oldColNames as $colKey => $colStruct) {
+      if (!$newColNames[$colKey]) {
+        unset($oldColNames[$colKey]);
+      }
+    }
+
+    $tableName = $this->quoteName($newTableStruct["__TABLE_META__"]["TABLE_NAME"]);
+
+    // use old column structure because we dont want to change the column but only the order
+    $afterColumn = -1;
+    foreach ($newColNames as $columnName) {
+
+      $columnDef = $this->columnDefStmt($oldTableStruct["__COLUMNS__"][$columnName], array("afterColumnName" => $afterColumn));
+      $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colName $columnDef";
+      $afterColumn = $colName;
+
+      $this->log(static::LOG_DEBUG, "$stmt\n");
+      if (!$this->getParam("dry-run")) {
+        $pstmt = $this->conn->prepare($stmt);
+        $pstmt->execute();
+      }
+
+    }  // eo common column loop
+
+  }  // eo order table columns
 
 
 
