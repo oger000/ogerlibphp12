@@ -88,7 +88,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     // get tables info
 
     $pstmt = $this->conn->prepare("
-        SELECT TABLE_NAME,
+        SELECT TABLE_NAME
           FROM INFORMATION_SCHEMA.TABLES
           WHERE TABLE_CATALOG=:catalogName AND
                 TABLE_SCHEMA=:dbName
@@ -120,7 +120,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     $struct = array();
 
     $pstmt = $this->conn->prepare("
-        SELECT TABLE_NAME, ENGINE, TABLE_COLLATION, TABLE_COMMENT,
+        SELECT TABLE_NAME, ENGINE, TABLE_COLLATION, TABLE_COMMENT
           FROM INFORMATION_SCHEMA.TABLES
           WHERE TABLE_CATALOG=:catalogName AND
                 TABLE_SCHEMA=:dbName AND
@@ -130,16 +130,16 @@ class OgerDbStructMysql extends OgerDbStruct {
     $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
 
-    if (count($tableRecords) > 1)
+    if (count($tableRecords) > 1) {
       throw new Exception("More than one table schema found for table name {$tableName}.");
     }
 
-    if (count($tableRecords) < 1)
+    if (count($tableRecords) < 1) {
       return $struct;
     }
 
 
-    $tableRecord = reset($tableRecords)
+    $tableRecord = reset($tableRecords);
     $tableKey = strtolower($tableName);
 
     $struct["__TABLE_META__"] = $tableRecord;
@@ -216,6 +216,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       // the meta info is taken from the last column info which overwrites the prevous meta info
       $struct["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_NAME"] = $indexName;
       $struct["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_KEY_TYPE"] = $indexType;
+      $struct["__INDICES__"][$indexKey]["__INDEX_META__"]["TABLE_NAME"] = $indexRecord["TABLE_NAME"];
 
       // index columns
       $indexColumnKey = strtolower($indexRecord["COLUMN_NAME"]);
@@ -230,30 +231,32 @@ class OgerDbStructMysql extends OgerDbStruct {
     // the TABLE_CONSTRAINTS contains only constraint names,
     // so we use KEY_COLUMN_USAGE this time
     $pstmt = $this->conn->prepare("
-        SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT,
+        SELECT TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT,
                REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
           FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
           WHERE TABLE_CATALOG=:catalogName AND
                 TABLE_SCHEMA=:dbName AND
                 TABLE_NAME=:tableName AND
-                REFERENCED_TABLE_NAME NOT IS NULL
+                REFERENCED_TABLE_NAME IS NOT NULL
           ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION
         ");
     $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
-    $foreignRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $fkRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
 
-    foreach ($foreignRecords as $foreignRecord) {
+    foreach ($fkRecords as $fkRecord) {
 
-      $foreignName = $indexRecord["CONSTRAINT_NAME"];
-      $foreignKey = strtolower($foreignName);
+      $fkName = $fkRecord["CONSTRAINT_NAME"];
+      $fkKey = strtolower($fkName);
 
 
-      $struct["__FOREIGN_KEY_NAMES__"][$foreignKey] = $foreignName;
+      $struct["__FOREIGN_KEY_NAMES__"][$fkKey] = $fkName;
 
       // the meta info is taken from the last entry info which overwrites the prevous meta info
-      //$struct["__FOREIGN_KEYS__"][$foreignKey]["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"] = $foreignName;
-      //$struct["__FOREIGN_KEYS__"][$foreignKey]["__FOREIGN_KEY_META__"]["INDEX_KEY_TYPE"] = $indexType;
+      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"] = $fkName;
+      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["TABLE_NAME"] = $fkRecord["TABLE_NAME"];
+      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_SCHEMA"] = $fkRecord["REFERENCED_TABLE_SCHEMA"];
+      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_NAME"] = $fkRecord["REFERENCED_TABLE_NAME"];
 
       /* see <http://stackoverflow.com/questions/953035/multiple-column-foreign-key-in-mysql>
        * CREATE TABLE MyReferencingTable AS (
@@ -277,12 +280,12 @@ class OgerDbStructMysql extends OgerDbStruct {
 
       // foreign keys
       // I could not find anything that could I use as uniqe key, so add to array without key
-      //$foreignColumnKey = strtolower($foreignRecord["CONSTRAINT_NAME"]);
-      $struct["__FOREIGN_KEYS__"][$foreignKey][] = $foreignRecord;
+      $fkColumnKey = strtolower($fkRecord["COLUMN_NAME"]);
+      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_COLUMNS__"][$fkColumnKey] = $fkRecord;
 
     }  // eo constraint loop
 
-    $return struct;
+    return $struct;
   }  // eo get table struc
 
 
@@ -301,7 +304,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->orderTableColumns($tableDef["__COLUMNS__"]);
 
     $delim = "";
-    foreach ($columns as $columnDef) {
+    foreach ($tableDef["__COLUMNS__"] as $columnDef) {
       $stmt .= $delim . $this->columnDefStmt($columnDef);
       $delim = ",\n  ";
     }  // eo column loop
@@ -316,10 +319,10 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo include indices
 
     // foreign keys
-    if (!$opts["noConstraints"]) {
+    if (!$opts["noForeignKeys"]) {
       if ($tableDef["__FOREIGN_KEYS__"]) {
-        foreach ($tableDef["__FOREIGN_KEYS__"] as $foreignKey => $foreignDef) {
-          // FIXME $stmt .= $delim . $this->indexDefStmt($indexDef);
+        foreach ($tableDef["__FOREIGN_KEYS__"] as $fkKey => $fkDef) {
+          $stmt .= $delim . $this->foreignKeyDefStmt($fkDef);
         }
       }  // eo constraint loop
     }  // eo include foreign keys
@@ -333,7 +336,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     // and does this internally automatically if a collation is given.
     // So we depend on this - provide the collation and omit the charset.
     $stmt .= " DEFAULT" .
-          " ENGINE={$tableMeta['ENGINE']}";
+          " ENGINE={$tableMeta['ENGINE']}" .
           // " CHARSET={$tableMeta['']}" .  // see note above
           " COLLATE={$tableMeta['TABLE_COLLATION']}";
 
@@ -370,7 +373,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create a column definition statement.
   * @see OgerDbStruct::columnDefStmt().
   */
-  public function columnDefStmt($columnDef) {
+  public function columnDefStmt($columnDef, $opts = array()) {
 
     $stmt = $this->quoteName($columnDef["COLUMN_NAME"]) .
             " " . $columnDef["COLUMN_TYPE"] .
@@ -456,7 +459,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // return per value
     return $columns;
-  }  // eo order table columns
+  }  // eo order index columns
 
 
   /**
@@ -468,8 +471,18 @@ class OgerDbStructMysql extends OgerDbStruct {
     $stmt = "ALTER TABLE " .
             $this->quoteName($columnDef["TABLE_NAME"]) .
             " ADD COLUMN " .
-            $this->columnDefStmt($columnDef)
-            ($opts["afterColumnName"] ? " AFTER {$opts["afterColumnName"]}" : " FIRST");
+            $this->columnDefStmt($columnDef);
+
+    // if afterColumnName is empty we do nothing (that means the field is appended without position)
+    if ($opts["afterColumnName"]) {
+      // negative numeric values result in inserting on first position
+      if ($opts["afterColumnName"] < 0) {
+        $stmt .= " FIRST";
+      }
+      else {
+        $stmt .= " AFTER {$opts["afterColumnName"]}";
+      }
+    }
 
     return $stmt;
   }  // eo add column
@@ -533,8 +546,58 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
 
+  /**
+  * Create a table foreign key statement.
+  * @see OgerDbStruct::foreignKeyDefStmt().
+  */
+  public function foreignKeyDefStmt($fkDef) {
+
+    $fkName = $this->quoteName($fkDef["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+
+    $stmt = "CONSTRAINT $fkName";
+
+    // force order of columns and extract names
+    // we assume that the column order in the reference is the same as in the foreign key
+    $this->orderForeignKeyColumns($fkDef["__FOREIGN_KEY_COLUMNS__"]);
+    $colNames = array();
+    $colNamesRef = array();
+    foreach ($fkDef["__FOREIGN_KEY_COLUMNS__"] as $fkColumnDef) {
+      $colNames[] = $this->quoteName($fkColumnDef["COLUMN_NAME"]);
+      $colNamesRef[] = $this->quoteName($fkColumnDef["REFERENCED_COLUMN_NAME"]);
+    }
+
+    // put fields and reference to statement
+    $stmt .= " FOREIGN KEY (" . implode(", ", $colNames) . ")";
+    $refTable = $this->quoteName($fkDef["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_NAME"]);
+    $stmt .= " REFERENCES $refTable (" . implode(", ", $colNamesRef) . ")";
+
+    return $stmt;
+  }  // eo foreign key def
 
 
+  /**
+  * Force order of foreign key columns.
+  * @see OgerDbStruct::orderForeignKeyColumns().
+  */
+  public function orderForeignKeyColumns(&$columns){
+
+    $tmpCols = array();
+
+    // preserve references
+    foreach ($columns as $columnKey => &$columnDef) {
+      $tmpCols[$columnDef["ORDINAL_POSITION"] * 1] = &$columnDef;
+    }
+    ksort($tmpCols);
+
+    // assign back to original array
+    $columns = array();
+    foreach ($tmpCols as &$columnDef) {
+      $columns[strtolower($columnDef["COLUMN_NAME"])] = &$columnDef;
+    }
+
+    // return per value
+    return $columns;
+  }  // eo order foreign key columns
 
 
 

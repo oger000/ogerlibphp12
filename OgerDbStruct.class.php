@@ -8,6 +8,8 @@
 /**
 * Handle database structure.
 * Supported databases are: Only MySql by now.
+* Main top level methods are: getDbStruct(), addDbStruct(),
+* refreshDbStruct(), updateDbStruct(), orderDbStruct(), removeDbStruct() and forceDbStruct().
 */
 abstract class OgerDbStruct {
 
@@ -97,6 +99,10 @@ abstract class OgerDbStruct {
   */
   public function log($msgLogLevel, $text) {
     if ($msgLogLevel <= $this->getParam("log-level")) {
+      if ($this->getParam("echo-log")) {
+        echo $text;
+      }
+      $this->addLog($text);
       $this->addLog($text);
     }
   }  // eo add log for log level
@@ -106,7 +112,7 @@ abstract class OgerDbStruct {
   * @param $text Text added to the log buffer.
   */
   public function addLog($text) {
-    $this->log .= $text . "\n\n";
+    $this->log .= $text;
   }  // eo add log
 
   /**
@@ -118,14 +124,14 @@ abstract class OgerDbStruct {
   }  // eo get log
 
   /**
-  * Clear log buffer.
+  * Flush log buffer.
   * @return Log content.
   */
-  public function clearLog() {
+  public function flushLog() {
     $ret = $this->log;
     $this->log = "";
     return $ret;
-  }  // eo clear log
+  }  // eo flush log
 
 
 
@@ -190,11 +196,12 @@ abstract class OgerDbStruct {
   * @param $newStruct Array with the new database structure.
   * @param $oldStruct Optional array with the new database structure.
   *        If not present it is located from the associated database.
+  * @param $opts Optional options array.
   */
   /*
    * TODO check if needed table structure infos are realy driver independent
    */
-  public function addDbStruct($newStruct, $oldStruct = null) {
+  public function addDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
@@ -207,7 +214,7 @@ abstract class OgerDbStruct {
       $newTableName = $newTableDef["__TABLE_META__"]["TABLE_NAME"];
 
       if (!$oldStruct["__TABLES__"][$newTableKey]) {
-        $this->addTable($newTableDef, $array("noForeignKeys" => true));
+        $this->addTable($newTableDef, array("noForeignKeys" => true));
       }
       else {
 
@@ -215,7 +222,7 @@ abstract class OgerDbStruct {
         $afterColumnName = "";
         foreach ($newTableDef["__COLUMNS__"] as $newColumnKey => $newColumnDef) {
           if (!$oldStruct["__TABLES__"][$newTableKey]["__COLUMNS__"][$newColumnKey]) {
-            $this->addTableColumn($newColumnDef, array("afterColumnName" => $afterColumnName);
+            $this->addTableColumn($newColumnDef, array("afterColumnName" => $afterColumnName));
           }
           // this column exists (old or new created) so the next missing column will be added after this
           $afterColumnName = $newColumnDef["COLUMN_NAME"];
@@ -233,17 +240,21 @@ abstract class OgerDbStruct {
 
 
     // add foreign keys after all tables, columns and indices has been created
-    foreach ($newStruct["__TABLES__"] as $newTableKey => $newTableDef) {
+    if (!$opts["noForeignKeys"]) {
+      foreach ($newStruct["__TABLES__"] as $newTableKey => $newTableDef) {
 
-      $newTableName = $newTableDef["__TABLE_META__"]["TABLE_NAME"];
+        $newTableName = $newTableDef["__TABLE_META__"]["TABLE_NAME"];
 
-      foreach ($newTableDef["__FOREIGN_KEYS__"] as $newForeignKey => $newForeignDef) {
-        if (!$oldStruct["__TABLES__"][$newTableKey]["__FOREIGN_KEYS__"][$newForeignKey]) {
-          // FIXME $this->addTableForeignKey($newForeignDef);
-        }
-      }  // eo foreign key loop
-
-    }  // eo table loop for foreign keys
+        // foreign keys
+        if ($newTableDef["__FOREIGN_KEYS__"]) {
+          foreach ($newTableDef["__FOREIGN_KEYS__"] as $newFkKey => $newFkDef) {
+            if (!$oldStruct["__TABLES__"][$newTableKey]["__FOREIGN_KEYS__"][$newFkKey]) {
+              $this->addTableForeignKey($newFkDef);
+            }
+          }
+        }  // eo constraint loop
+      }  // eo table loop for foreign keys
+    }  // eo include foreign keys
 
   }  // eo add db struc
 
@@ -256,7 +267,7 @@ abstract class OgerDbStruct {
   */
   public function addTable($tableDef, $opts) {
     $stmt = $this->tableDefCreateStmt($tableDef, $opts);
-    $this->log(static::LOG_DEBUG, $stmt);
+    $this->log(static::LOG_DEBUG, "$stmt\n");
     if (!$this->getParam("dry-run")) {
       $pstmt = $this->conn->prepare($stmt);
       $pstmt->execute();
@@ -270,7 +281,7 @@ abstract class OgerDbStruct {
   */
   public function addTableColumn($columnDef, $opts) {
     $stmt = $this->columnDefAddStmt($columnDef, $opts);
-    $this->log(static::LOG_DEBUG, $stmt);
+    $this->log(static::LOG_DEBUG, "$stmt\n");
     if (!$this->getParam("dry-run")) {
       $pstmt = $this->conn->prepare($stmt);
       $pstmt->execute();
@@ -281,9 +292,10 @@ abstract class OgerDbStruct {
   /**
   * Create an add table statement.
   * @param $tableDef Array with the table definition.
+  * @param $opts Optional options array.
   * @return The SQL statement for table definition.
   */
-  abstract public function tableDefCreateStmt($tableDef);
+  abstract public function tableDefCreateStmt($tableDef, $opts);
 
 
   /**
@@ -300,9 +312,10 @@ abstract class OgerDbStruct {
   /**
   * Create a column definition statement.
   * @param $columnDef  Array with column definition.
+  * @param $opts Optional options array.
   * @return The SQL statement part for a column definition.
   */
-  abstract public function columnDefStmt($columnDef);
+  abstract public function columnDefStmt($columnDef, $opts = array());
 
 
   /**
@@ -327,9 +340,10 @@ abstract class OgerDbStruct {
   /**
   * Create an add column statement.
   * @param $columnDef Array with the column definition.
+  * @param $opts Optional options array.
   * @return The SQL statement for adding a column.
   */
-  abstract public function columnDefAddStmt($columnDef);
+  abstract public function columnDefAddStmt($columnDef, $opts);
 
 
   /**
@@ -337,8 +351,9 @@ abstract class OgerDbStruct {
   * @param $newStruct Array with the new database structure.
   * @param $oldStruct Optional array with the new database structure.
   *        If not present it is located from the associated database.
+  * @param $opts Optional options array.
   */
-  public function updateDbStruct($newStruct, $oldStruct = null) {
+  public function updateDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
@@ -394,7 +409,7 @@ abstract class OgerDbStruct {
   public function refreshColumn($newColumnDef, $oldColumnDef) {
     $stmt = $this->columnDefUpdateStmt($newColumnDef, $oldColumnDef);
     if ($stmt) {
-      $this->log(static::LOG_DEBUG, $stmt);
+      $this->log(static::LOG_DEBUG, "$stmt\n");
       if (!$this->getParam("dry-run")) {
         $pstmt = $this->conn->prepare($stmt);
         $pstmt->execute();
@@ -417,7 +432,7 @@ abstract class OgerDbStruct {
   * @param $oldStruct Optional array with the new database structure.
   *        If not present it is located from the associated database.
   */
-  public function refreshDbStruct($newStruct, $oldStruct = null) {
+  public function refreshDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
@@ -448,7 +463,7 @@ abstract class OgerDbStruct {
     // update table defaults
     $stmt = $this->tableDefUpdateStmt($newTableDef, $oldTableDef);
     if ($stmt) {
-      $this->log(static::LOG_DEBUG, $stmt);
+      $this->log(static::LOG_DEBUG, "$stmt\n");
       if (!$this->getParam("dry-run")) {
         $pstmt = $this->conn->prepare($stmt);
         $pstmt->execute();
@@ -470,9 +485,120 @@ abstract class OgerDbStruct {
   }  // eo refresh table
 
 
+  /**
+  * Order columns of tables.
+  * Order only columns of tables because the order of
+  * columns in indices and foreign keys is treated significant
+  * and therefore handled by updateDbStruct().
+  * Tables do not have a specific order inside the database.
+  * @param $newStruct Array with the new database structure.
+  * @param $oldStruct Optional array with the new database structure.
+  *        If not present it is located from the associated database.
+  * @param $opts Optional options array.
+  */
+  public function orderDbStruct($newStruct, $oldStruct = null, $opts = array()) {
+
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+
+    if (!$oldStruct) {
+      $oldStruct = $this->getDbStruct();
+    }
+
+    foreach ($newStruct["__TABLES__"] as $newTableKey => $newTableDef) {
 
 
+    }  // eo table loop
 
+  }  // eo order db struct
+
+
+  /**
+  * Remove surpluss tables, columns, indices and foreign keys.
+  * Despite the first impression not the given database struct is removed
+  * but everything that is above.
+  * @param $newStruct Array with the new database structure.
+  * @param $oldStruct Optional array with the new database structure.
+  *        If not present it is located from the associated database.
+  * @param $opts Optional options array.
+  */
+  public function removeDbStruct($newStruct, $oldStruct = null, $opts = array()) {
+
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+
+    if (!$oldStruct) {
+      $oldStruct = $this->getDbStruct();
+    }
+
+    foreach ($oldStruct["__TABLES__"] as $oldTableKey => $oldTableDef) {
+
+
+    }  // eo table loop
+
+  }  // eo order db struct
+
+
+  /**
+  * Force database structure.
+  * Forces the given database structure by adding, updating and deleting divergent structure.
+  * @param $newStruct Array with the new database structure.
+  * @param $oldStruct Optional array with the new database structure.
+  *        If not present it is located from the associated database.
+  * @param $opts Optional options array.
+  */
+  public function forceDbStruct($newStruct, $oldStruct = null, $opts = array()) {
+
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+
+    if (!$oldStruct) {
+      $oldStruct = $this->getDbStruct();
+    }
+
+    $this->updateDbStruct($newStruct, $oldStruct, $opts);
+
+    // do not hand over old struct because maybe heavily changed by updateDbStruct
+    $this->removeDbStruct($newStruct);
+
+  }  // eo order db struct
+
+
+  /**
+  * Create a table foreign key definition statement.
+  * @param $fkDef  Array with foreign key definition.
+  * @return The SQL statement for the foreign key sql statement.
+  */
+  abstract public function foreignKeyDefStmt($fkDef);
+
+
+  /**
+  * Add a index to a table.
+  * @param $indexDef Array with the index definition.
+  * @param $opts Optional option array. Key is option.
+  */
+  public function addTableIndex($indexDef, $opts = array()) {
+    $tableName = $this->quoteName($indexDef["__INDEX_META__"]["TABLE_NAME"]);
+    $stmt = "ALTER TABLE $tableName ADD " . $this->indexDefStmt($indexDef, $opts);
+    $this->log(static::LOG_DEBUG, "$stmt\n");
+    if (!$this->getParam("dry-run")) {
+      $pstmt = $this->conn->prepare($stmt);
+      $pstmt->execute();
+    }
+  }  // eo add index
+
+
+  /**
+  * Add a foreign key to a table.
+  * @param $fkDef Array with the foreign key definition.
+  * @param $opts Optional option array. Key is option.
+  */
+  public function addTableForeignKey($fkDef, $opts = array()) {
+    $tableName = $this->quoteName($fkDef["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
+    $stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkDef, $opts);
+    $this->log(static::LOG_DEBUG, "$stmt\n");
+    if (!$this->getParam("dry-run")) {
+      $pstmt = $this->conn->prepare($stmt);
+      $pstmt->execute();
+    }
+  }  // eo add foreign key
 
 
 }  // eo class
