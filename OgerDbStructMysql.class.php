@@ -111,7 +111,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     $struct = array();
 
     $pstmt = $this->conn->prepare("
-        SELECT TABLE_NAME, ENGINE, TABLE_COLLATION, TABLE_COMMENT
+        SELECT TABLE_NAME, ENGINE, TABLE_COLLATION
           FROM INFORMATION_SCHEMA.TABLES
           WHERE TABLE_CATALOG=:catalogName AND
                 TABLE_SCHEMA=:dbName AND
@@ -217,7 +217,27 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
     // ---------------
-    // get foreign keys info
+    // get foreign keys references and columns
+
+      /* see <http://stackoverflow.com/questions/953035/multiple-column-foreign-key-in-mysql>
+       * CREATE TABLE MyReferencingTable AS (
+           [COLUMN DEFINITIONS]
+           refcol1 INT NOT NULL,
+           rofcol2 INT NOT NULL,
+           CONSTRAINT fk_mrt_ot FOREIGN KEY (refcol1, refcol2)
+                                REFERENCES OtherTable(col1, col2)
+          ) ENGINE=InnoDB;
+
+          MySQL requires foreign keys to be indexed, hence the index on the referencing columns
+          Use of the constraint syntax enables you to name a constraint, making it easier to alter and drop at a later time if needed.
+          InnoDB enforces foreign keys, MyISAM does not. (The syntax is parsed but ignored)
+      */
+
+      /*
+       * ALTER TABLE `testtab4` ADD FOREIGN KEY ( `id1` ) REFERENCES `test`.`testtab1` (
+          `id1`
+          ) ON DELETE RESTRICT ON UPDATE RESTRICT ;
+      */
 
     // the TABLE_CONSTRAINTS contains only constraint names,
     // so we use KEY_COLUMN_USAGE this time
@@ -240,7 +260,6 @@ class OgerDbStructMysql extends OgerDbStruct {
       $fkName = $fkRecord["CONSTRAINT_NAME"];
       $fkKey = strtolower($fkName);
 
-
       $struct["__FOREIGN_KEY_NAMES__"][$fkKey] = $fkName;
 
       // the meta info is taken from the last entry info which overwrites the prevous meta info
@@ -249,32 +268,42 @@ class OgerDbStructMysql extends OgerDbStruct {
       $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_SCHEMA"] = $fkRecord["REFERENCED_TABLE_SCHEMA"];
       $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_NAME"] = $fkRecord["REFERENCED_TABLE_NAME"];
 
-      /* see <http://stackoverflow.com/questions/953035/multiple-column-foreign-key-in-mysql>
-       * CREATE TABLE MyReferencingTable AS (
-           [COLUMN DEFINITIONS]
-           refcol1 INT NOT NULL,
-           rofcol2 INT NOT NULL,
-           CONSTRAINT fk_mrt_ot FOREIGN KEY (refcol1, refcol2)
-                                REFERENCES OtherTable(col1, col2)
-          ) ENGINE=InnoDB;
-
-          MySQL requires foreign keys to be indexed, hence the index on the referencing columns
-          Use of the constraint syntax enables you to name a constraint, making it easier to alter and drop at a later time if needed.
-          InnoDB enforces foreign keys, MyISAM does not. (The syntax is parsed but ignored)
-      */
-
-      /*
-       * ALTER TABLE `testtab4` ADD FOREIGN KEY ( `id1` ) REFERENCES `test`.`testtab1` (
-          `id1`
-          ) ON DELETE RESTRICT ON UPDATE RESTRICT ;
-      */
-
-      // foreign keys
-      // I could not find anything that could I use as uniqe key, so add to array without key
+      // referenced columns
       $fkColumnKey = strtolower($fkRecord["COLUMN_NAME"]);
       $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_COLUMNS__"][$fkColumnKey] = $fkRecord;
 
-    }  // eo constraint loop
+    }  // eo foreign key columns loop
+
+
+    // ---------------
+    // get foreign keys constraint rules
+
+    // unused columns: UNIQUE_CONSTRAINT_CATALOG, UNIQUE_CONSTRAINT_SCHEMA, UNIQUE_CONSTRAINT_NAME
+
+    $pstmt = $this->conn->prepare("
+        SELECT CONSTRAINT_SCHEMA, TABLE_NAME, CONSTRAINT_NAME,
+               MATCH_OPTION, UPDATE_RULE, DELETE_RULE, REFERENCED_TABLE_NAME
+          FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+          WHERE CONSTRAINT_CATALOG=:catalogName AND
+                CONSTRAINT_SCHEMA=:dbName AND
+                TABLE_NAME=:tableName
+          ORDER BY TABLE_NAME, CONSTRAINT_NAME
+        ");
+    $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
+    $fkRulesRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+
+    foreach ($fkRulesRecords as $fkRulesRecord) {
+
+      $fkName = $fkRulesRecord["CONSTRAINT_NAME"];
+      $fkKey = strtolower($fkName);
+
+      // complete the meta info
+      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["MATCH_OPTION"] = $fkRulesRecord["MATCH_OPTION"];
+      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["UPDATE_RULE"] = $fkRulesRecord["UPDATE_RULE"];
+      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["DELETE_RULE"] = $fkRulesRecord["DELETE_RULE"];
+
+    }  // eo foreign key columns loop
 
     return $struct;
   }  // eo get table struc
@@ -607,9 +636,11 @@ class OgerDbStructMysql extends OgerDbStruct {
     }
 
     // put fields and reference to statement
+    $fkMeta = $fkStruct["__FOREIGN_KEY_META__"];
     $stmt .= " FOREIGN KEY (" . implode(", ", $colNames) . ")";
-    $refTable = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_NAME"]);
-    $stmt .= " REFERENCES $refTable (" . implode(", ", $colNamesRef) . ")";
+    $refTable = $this->quoteName($fkMeta["REFERENCED_TABLE_NAME"]);
+    $stmt .= " REFERENCES $refTable (" . implode(", ", $colNamesRef) . ")" .
+             " ON DELETE {$fkMeta['DELETE_RULE']} ON UPDATE {$fkMeta['UPDATE_RULE']}";
 
     return $stmt;
   }  // eo foreign key def
