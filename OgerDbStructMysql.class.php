@@ -36,15 +36,11 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Check for driver compatibility.
   * @see OgerDbStruct::checkDriverCompat().
   */
-  public function checkDriverCompat($driverName, $trow = false) {
+  public function checkDriverCompat($driverName) {
     if ($driverName != "mysql") {
-      if ($throw) {
-        throw new Exception ("Driver '$driverName' not compatible. 'mysql' expected.");
-      }
-      return false;
+      throw new Exception ("Driver '$driverName' not compatible. 'mysql' expected.");
     }
-    return true;
-  }
+  }  // eo check driver compat
 
 
   /**
@@ -83,12 +79,16 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function getTableNames($opts) {
 
-    $pstmt = $this->conn->prepare("
+    $stmt = "
         SELECT TABLE_NAME
           FROM INFORMATION_SCHEMA.TABLES
           WHERE TABLE_CATALOG=:catalogName AND
                 TABLE_SCHEMA=:dbName
-        ");
+        ";
+    if ($opts["tablesWhere"]) {
+      $stmt .= " AND {$opts["tablesWhere"]}";
+    }
+    $pstmt = $this->conn->prepare($stmt);
     $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName));
     $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();

@@ -5,17 +5,19 @@
 */
 
 // TODO case insensitive -> case sensitive change for table names
-// TODO removeDbStruct, forceDbStruct
+// TODO cleanupDbStruct
 // TODO TEST TEST TEST
 
 /**
 * Handle database structure.
 * Supported databases are: Only MySql by now.
 * Main top level methods are: getDbStruct(), addDbStruct(),
-* refreshDbStruct(), updateDbStruct(), reorderDbStruct(), removeDbStruct() and forceDbStruct().<br>
+* refreshDbStruct(), updateDbStruct(), reorderDbStruct(), cleanupDbStruct() and forceDbStruct().<br>
 * <em>ATTENTION:</em> Do not use the $opts parameter without reading the source
 * because it is implementet only in some parts.<br>
 * No renaming is provided.<br>
+* This class is mixed up with OgerDbStructMysql and maybe contains code that is
+* not driver independent and should go to to OgerDbStructMysql.<br>
 */
 abstract class OgerDbStruct {
 
@@ -143,9 +145,9 @@ abstract class OgerDbStruct {
   /**
   * Check for driver compatibility.
   * @param $driverName PDO driver name.
-  * @param $throw If set to true an exception is thrown if not compatible, otherwise false is returned.
+  * @param $throw Throw an exception if not compatible.
   */
-  abstract public function checkDriverCompat($driverName, $throw = false);
+  abstract public function checkDriverCompat($driverName);
 
 
   /**
@@ -166,10 +168,12 @@ abstract class OgerDbStruct {
   public function executeStmt($stmt, $values = array()) {
     $stmts = explode(";", $stmt);
     foreach ($stmts as $stmt) {
-      $this->log(static::LOG_DEBUG, "$stmt\n");
-      if (!$this->getParam("dry-run")) {
-        $pstmt = $this->conn->prepare($stmt);
-        $pstmt->execute();
+      if ($stmt) {
+        $this->log(static::LOG_DEBUG, "$stmt\n");
+        if (!$this->getParam("dry-run")) {
+          $pstmt = $this->conn->prepare($stmt);
+          $pstmt->execute();
+        }
       }
     }
   }  // eo execute stmt
@@ -269,7 +273,7 @@ abstract class OgerDbStruct {
 
       $newTableName = $newTableStruct["__TABLE_META__"]["TABLE_NAME"];
       $oldTableStruct = $oldStruct["__TABLES__"][$newTableKey];
-      if (!$oldTableStruct) {
+      if ($oldTableStruct === null) {
         $this->addTable($newTableStruct, array("noForeignKeys" => true));
       }
       else {
@@ -306,11 +310,7 @@ abstract class OgerDbStruct {
   */
   public function addTable($tableStruct, $opts) {
     $stmt = $this->tableDefCreateStmt($tableStruct, $opts);
-    $this->log(static::LOG_DEBUG, "$stmt\n");
-    if (!$this->getParam("dry-run")) {
-      $pstmt = $this->conn->prepare($stmt);
-      $pstmt->execute();
-    }
+    $this->executeStmt($stmt);
   }  // eo add table
 
 
@@ -320,11 +320,7 @@ abstract class OgerDbStruct {
   */
   public function addTableColumn($columnStruct, $opts) {
     $stmt = $this->columnDefAddStmt($columnStruct, $opts);
-    $this->log(static::LOG_DEBUG, "$stmt\n");
-    if (!$this->getParam("dry-run")) {
-      $pstmt = $this->conn->prepare($stmt);
-      $pstmt->execute();
-    }
+    $this->executeStmt($stmt);
   }  // eo add column to table
 
 
@@ -398,7 +394,7 @@ abstract class OgerDbStruct {
 
     // get old structure before adding missing parts
     // because we dont have to refresh that
-    if (!$oldStruct) {
+    if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
     }
 
@@ -471,13 +467,7 @@ abstract class OgerDbStruct {
   */
   public function refreshTableColumn($newColumnStruct, $oldColumnStruct) {
     $stmt = $this->columnDefUpdateStmt($newColumnStruct, $oldColumnStruct);
-    if ($stmt) {
-      $this->log(static::LOG_DEBUG, "$stmt\n");
-      if (!$this->getParam("dry-run")) {
-        $pstmt = $this->conn->prepare($stmt);
-        $pstmt->execute();
-      }
-    }
+    $this->executeStmt($stmt);
   }  // eo update column
 
 
@@ -501,7 +491,7 @@ abstract class OgerDbStruct {
 
     // get old structure before adding missing parts
     // because we dont have to update that
-    if (!$oldStruct) {
+    if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
     }
 
@@ -525,12 +515,7 @@ abstract class OgerDbStruct {
 
     // refresh table defaults
     $stmt = $this->tableDefUpdateStmt($newTableStruct, $oldTableStruct);
-    if ($stmt) {
-      $this->log(static::LOG_DEBUG, "$stmt\n");
-      if (!$this->getParam("dry-run")) {
-        $pstmt = $this->conn->prepare($stmt);
-        $pstmt->execute();
-      }
+    $this->executeStmt($stmt);
     }
 
     // refresh existing columns
@@ -575,7 +560,7 @@ abstract class OgerDbStruct {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
-    if (!$oldStruct) {
+    if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
     }
 
@@ -590,23 +575,24 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Remove surpluss tables, columns, indices and foreign keys.
-  * Despite the first impression not the given database struct is removed
+  * Cleanup surpluss tables, columns, indices and foreign keys.
+  * Despite the first impression not the given database struct is cleaned up
   * but everything that is above.
   * @param $newStruct Array with the new database structure.
   * @param $oldStruct Optional array with the old database structure.
   *        If not present it is located from the associated database.
   * @param $opts Optional options array.
   */
-  public function removeDbStruct($newStruct, $oldStruct = null, $opts = array()) {
+  public function cleanupDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
-    if (!$oldStruct) {
+    if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
     }
 
     foreach ($oldStruct["__TABLES__"] as $oldTableKey => $oldTableStruct) {
+      if (!$newStruct["__TABLES__"][$oldTableKey]) {
 
 
     }  // eo table loop
@@ -626,14 +612,14 @@ abstract class OgerDbStruct {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
-    if (!$oldStruct) {
+    if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
     }
 
     $this->updateDbStruct($newStruct, $oldStruct, $opts);
 
     // do not hand over old struct because maybe heavily changed by updateDbStruct
-    $this->removeDbStruct($newStruct);
+    $this->cleanupDbStruct($newStruct);
 
   }  // eo order db struct
 
@@ -654,11 +640,7 @@ abstract class OgerDbStruct {
   public function addTableIndex($indexStruct, $opts = array()) {
     $tableName = $this->quoteName($indexStruct["__INDEX_META__"]["TABLE_NAME"]);
     $stmt = "ALTER TABLE $tableName ADD " . $this->indexDefStmt($indexStruct, $opts);
-    $this->log(static::LOG_DEBUG, "$stmt\n");
-    if (!$this->getParam("dry-run")) {
-      $pstmt = $this->conn->prepare($stmt);
-      $pstmt->execute();
-    }
+    $this->executeStmt($stmt);
   }  // eo add index
 
 
@@ -670,11 +652,7 @@ abstract class OgerDbStruct {
   public function addTableForeignKey($fkStruct, $opts = array()) {
     $tableName = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
     $stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct, $opts);
-    $this->log(static::LOG_DEBUG, "$stmt\n");
-    if (!$this->getParam("dry-run")) {
-      $pstmt = $this->conn->prepare($stmt);
-      $pstmt->execute();
-    }
+    $this->executeStmt($stmt);
   }  // eo add foreign key
 
 
@@ -685,16 +663,7 @@ abstract class OgerDbStruct {
   */
   public function refreshTableIndex($newIndexStruct, $oldIndexStruct) {
     $stmt = $this->indexDefUpdateStmt($newIndexStruct, $oldIndexStruct);
-    if ($stmt) {
-      $stmts = explode(";", $stmt);
-      foreach ($stmts as $stmt) {
-        $this->log(static::LOG_DEBUG, "$stmt\n");
-        if (!$this->getParam("dry-run")) {
-          $pstmt = $this->conn->prepare($stmt);
-          $pstmt->execute();
-        }
-      }  // eo stmt loop
-    }
+    $this->executeStmt($stmt);
   }  // eo update index
 
 
@@ -705,16 +674,7 @@ abstract class OgerDbStruct {
   */
   public function refreshTableForeignKey($newFkStruct, $oldFkStruct) {
     $stmt = $this->foreignKeyDefUpdateStmt($newFkStruct, $oldFkStruct);
-    if ($stmt) {
-      $stmts = explode(";", $stmt);
-      foreach ($stmts as $stmt) {
-        $this->log(static::LOG_DEBUG, "$stmt\n");
-        if (!$this->getParam("dry-run")) {
-          $pstmt = $this->conn->prepare($stmt);
-          $pstmt->execute();
-        }
-      }  // eo stmt loop
-    }
+    $this->executeStmt($stmt);
   }  // eo update foreign key
 
 
