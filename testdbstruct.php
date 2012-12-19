@@ -33,7 +33,9 @@ $dbs2->setParam("dry-run", true);
 
 
 $dbStruct1 = $dbs1->getDbStruct();
-var_export($dbStruct1); echo "\n\n";
+//var_export($dbStruct1);
+echo $dbs1->formatDbStruct($dbStruct1);
+echo "\n\n";
 $dbs2->forceDbStruct($dbStruct1);
 
 

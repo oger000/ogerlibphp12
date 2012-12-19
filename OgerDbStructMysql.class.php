@@ -420,10 +420,10 @@ class OgerDbStructMysql extends OgerDbStruct {
       $stmt .= " DEFAULT $default";
     }  // eo default
 
-    // if afterColumnName is empty we do nothing (that means the field is appended without position)
-    if ($opts["afterColumnName"]) {
-      // negative numeric values result in inserting on first position
-      if ($opts["afterColumnName"] < 0) {
+    // if afterColumnName is null we do nothing (that means the field is appended without position)
+    if (!is_null($opts["afterColumnName"])) {
+      // empty values result in inserting on first position
+      if (!$opts["afterColumnName"]) {
         $stmt .= " FIRST";
       }
       else {
@@ -708,7 +708,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     $tableName = $this->quoteName($newTableStruct["__TABLE_META__"]["TABLE_NAME"]);
 
     // use old column structure because we dont want to change the column but only the order
-    $afterColumn = -1;
+    $afterColumn = "";
     foreach ($newColNames as $columnName) {
 
       $columnDef = $this->columnDefStmt($oldTableStruct["__COLUMNS__"][$columnName], array("afterColumnName" => $afterColumn));

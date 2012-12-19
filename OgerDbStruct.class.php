@@ -5,6 +5,7 @@
 */
 
 // TODO case insensitive -> case sensitive change for table names
+// TODO TEST TEST TEST
 
 /**
 * Handle database structure.
@@ -217,6 +218,7 @@ abstract class OgerDbStruct {
     $struct["__TIME__"] = date("c", $struct["__SERIAL__"]);
 
     $struct["__SCHEMA_META__"] = array();
+    $struct["__TABLE_NAMES__"] = array();
     $struct["__TABLES__"] = array();
 
     return $struct;
@@ -345,7 +347,11 @@ abstract class OgerDbStruct {
   /**
   * Create a column definition statement.
   * @param $columnStruct  Array with column definition.
-  * @param $opts Optional options array.
+  * @param $opts Optional options array. Key is option name.<br>
+  * Valid options are:<br>
+  * - afterColumnName: The column name after which this column should be placed.
+  *   Null means append after the last column.
+  *   Any other empty value means insert on first position.
   * @return The SQL statement part for a column definition.
   */
   abstract public function columnDefStmt($columnStruct, $opts = array());
@@ -422,7 +428,7 @@ abstract class OgerDbStruct {
 
     // add columns
     $this->orderTableStructColumns($newTableStruct["__COLUMNS__"]);
-    $afterColumnName = -1;
+    $afterColumnName = "";
     foreach ($newTableStruct["__COLUMNS__"] as $newColumnKey => $newColumnStruct) {
       if (!$oldTableStruct["__COLUMNS__"][$newColumnKey]) {
         $this->addTableColumn($newColumnStruct, array("afterColumnName" => $afterColumnName));
@@ -711,6 +717,46 @@ abstract class OgerDbStruct {
     $stmt = $this->foreignKeyDefUpdateStmt($newFkStruct, $oldFkStruct);
     $this->executeStmt($stmt);
   }  // eo update foreign key
+
+
+  /**
+  * Format the database struct array into a string.
+  * This should result in a more diff friendly output.
+  * @param $struct Array with the database structure.
+  * @param $opts Optional options array.
+  * TODO not ready
+  */
+  public function formatDbStruct($struct, $opts = array()) {
+
+    return var_export($struct, true);
+
+    $str = "array (\n";
+
+    $delim = "  ";
+    foreach ($struct as $key => $value) {
+      if ($key != "__TABLES__") {
+        $valueStr = var_export($value, true);
+        $valueStr = preg_replace("/\n\s*/s", " ", $valueStr);
+        $str .= "$delim'$key' => $valueStr";
+        $delim = ",\n  ";
+      }
+    };
+
+    $tables = $struct["__TABLES__"];
+    if (is_array($tables)) {
+      $str .= "{$delim}'__TABLES__' => ";
+      $valueStr = var_export($tables, true);
+      //$valueStr = preg_replace("/\n\s*/s", " ", $valueStr);
+      $str .= $valueStr;
+    }  // eo have tables
+
+
+    $str .= "\n)\n";
+
+    return $str;
+  }  // eo format db struct
+
+
 
 
 
