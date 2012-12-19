@@ -5,8 +5,6 @@
 */
 
 // TODO case insensitive -> case sensitive change for table names
-// TODO cleanupDbStruct
-// TODO TEST TEST TEST
 
 /**
 * Handle database structure.
@@ -263,7 +261,7 @@ abstract class OgerDbStruct {
    */
   public function addDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
 
     if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
@@ -390,7 +388,7 @@ abstract class OgerDbStruct {
   */
   public function updateDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
 
     // get old structure before adding missing parts
     // because we dont have to refresh that
@@ -487,7 +485,7 @@ abstract class OgerDbStruct {
   */
   public function refreshDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
 
     // get old structure before adding missing parts
     // because we dont have to update that
@@ -516,7 +514,6 @@ abstract class OgerDbStruct {
     // refresh table defaults
     $stmt = $this->tableDefUpdateStmt($newTableStruct, $oldTableStruct);
     $this->executeStmt($stmt);
-    }
 
     // refresh existing columns
     foreach ($newTableStruct["__COLUMNS__"] as $newColumnKey => $newColumnStruct) {
@@ -558,7 +555,7 @@ abstract class OgerDbStruct {
   */
   public function reorderDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
 
     if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
@@ -585,16 +582,54 @@ abstract class OgerDbStruct {
   */
   public function cleanupDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
 
     if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
     }
 
+    // first cleanup foreign keys before we remove tables or columns
     foreach ($oldStruct["__TABLES__"] as $oldTableKey => $oldTableStruct) {
-      if (!$newStruct["__TABLES__"][$oldTableKey]) {
+      $newTableStruct = $newStruct["__TABLES__"][$oldTableKey];
+      if (!$newTableStruct) {
+        continue;
+      }
+      $tableName = $this->quoteName($oldTableStruct["__TABLE_META__"]["TABLE_NAME"]);
+      foreach ($oldTableStruct["__FOREIGN_KEYS__"] as $fkKey => $fkStruct) {
+        if (!$newTableStruct["__FOREIGN_KEYS__"][$fkKey]) {
+          $fkName = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+          $stmt = "ALTER TABLE {$tableName} DROP CONSTRAINT {$fkName}";
+          $this->executeStmt($stmt);
+        }
+      }
+    }  // table loop for foreign keys
 
-
+    // cleanup tables
+    foreach ($oldStruct["__TABLES__"] as $oldTableKey => $oldTableStruct) {
+      $newTableStruct = $newStruct["__TABLES__"][$oldTableKey];
+      $tableName = $this->quoteName($oldTableStruct["__TABLE_META__"]["TABLE_NAME"]);
+      if (!$newTableStruct) {
+        $stmt = "DOP TABLE {$tableName}";
+        $this->executeStmt($stmt);
+      }
+      else {
+        // cleanup indices
+        foreach ($oldTableStruct["__INDICES__"] as $oldIndexKey => $oldIndexStruct) {
+          if (!$newTableStruct["__INDICES__"][$oldIndexKey]) {
+            $indexName = $this->quoteName($oldIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
+            $stmt = "ALTER TABLE {$tableName} DROP INDEX {$indexName}";
+            $this->executeStmt($stmt);
+          }
+        }
+        // cleanup columns
+        foreach ($oldTableStruct["__COLUMNS__"] as $oldColumnKey => $oldColumnStruct) {
+          if (!$newTableStruct["__COLUMNS__"][$oldColumnKey]) {
+            $columnName = $this->quoteName($oldColumnStruct["COLUMN_NAME"]);
+            $stmt = "ALTER TABLE {$tableName} DROP COLUMN {$columnName}";
+            $this->executeStmt($stmt);
+          }
+        }
+      }  // eo existing table
     }  // eo table loop
 
   }  // eo order db struct
@@ -610,7 +645,7 @@ abstract class OgerDbStruct {
   */
   public function forceDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
+    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
 
     if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
