@@ -140,6 +140,81 @@ abstract class OgerDbStruct {
   }  // eo flush log
 
 
+  /**
+  * Check for driver compatibility.
+  * @param $driverName PDO driver name.
+  * @param $throw If set to true an exception is thrown if not compatible, otherwise false is returned.
+  */
+  abstract public function checkDriverCompat($driverName, $throw = false);
+
+
+  /**
+  * Quote a table or column name.
+  * @param $name Name to be quoted.
+  */
+  public function quoteName($name) {
+    return "{$this->quoteNamBegin}$name{$this->quoteNamEnd}";
+  }  // eo quote name
+
+
+  /**
+  * Get the database structure.
+  * Keys for table and column names are in lowercase, so identifier cannot
+  * be used with different case. The structure does not contain privileges.
+  * @param $opts Optional options array where the key is the option name.<br>
+  * Valid options are:<br>
+  * - tablesWhere: A where condition that is passed to the getTableNames() method
+  *   to restrict the included tables. If empty all tables are included.
+  * @return Array with database structure.
+  */
+  public function getDbStruct($opts) {
+
+    $struct = $this->createStructHead();
+    $struct["__SCHEMA_META__"] = $this->getDbSchemaStruct();
+
+    $tableNames = $this->getTableNames($opts);
+
+    foreach ($tableNames as $tableName) {
+      $struct[
+
+    }  // eo table loop
+
+
+    return $struct;
+  }  // eo get db struct
+
+
+  /**
+  * Get the database schema structure.
+  * @return Array with database schema.
+  */
+  abstract public function getDbSchemaStruct();
+
+
+  /**
+  * Get the table names of the database.
+  * @param $opts Optional options array where the key is the option name.<br>
+  * Valid options are:<br>
+  * - tablesWhere: A where condition that is passed as WHERE condition to the tables
+ *    SELECT string to restrict the included tables. If empty all tables are included.
+  * @return Array with table names.
+  */
+  abstract public function getTableNames($opts);
+
+
+  /**
+  * Get the structure of one table.
+  * @return Array with the table structure.
+  */
+  abstract public function getTableStruct();
+
+
+
+
+
+
+
+
 
 
   /**
@@ -161,23 +236,6 @@ abstract class OgerDbStruct {
 
     return $struct;
   }  // eo create struct head
-
-
-  /**
-  * Quote a table or column name.
-  * @param $name Name to be quoted.
-  */
-  public function quoteName($name) {
-    return "{$this->quoteNamBegin}$name{$this->quoteNamEnd}";
-  }  // eo quote name
-
-
-  /**
-  * Check for driver compatibility.
-  * @param $driverName PDO driver name.
-  * @param $thow If set to true an exception is thrown if not compatible, otherwise false is returned.
-  */
-  abstract public function checkDriverCompat($driverName, $trow = false);
 
 
   /**

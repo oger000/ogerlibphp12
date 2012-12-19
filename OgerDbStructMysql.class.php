@@ -48,19 +48,12 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
   /**
-  * Get information schema for a mysql database.
-  * @see OgerDbStruct::getDbStruct().
-  * @throw Throws an exception if more than one schema is found for the database name from the PDO object.
+  * Get database schema structure for a mysql database.
+  * @see OgerDbStruct::getDbSchemaStruct().
+  * @throw Throws an exception if more than one schema is found for the given database name
+  *        or no schema is found.
   */
-  public function getDbStruct() {
-
-    // preapre db struct array
-    $struct = $this->createStructHead();
-
-    // ------------------
-    // get schema info
-
-    $this->defCatalogName = "def";
+  public function getDbSchemaStruct() {
 
     $pstmt = $this->conn->prepare("
         SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME
@@ -73,19 +66,22 @@ class OgerDbStructMysql extends OgerDbStruct {
     $pstmt->closeCursor();
 
     if (count($schemaRecords) > 1) {
-      throw new Exception("More than one schema found for name {$this->dbName}.");
+      throw new Exception("More than one schema found for database name {$this->dbName}.");
     }
 
-    // return silently if no schema found
     if (count($schemaRecords) < 1) {
-      return $struct;
+      throw new Exception("No schema found for database name {$this->dbName}.");
     }
 
-    $struct["__SCHEMA_META__"] = reset($schemaRecords);
+    return $schemaRecords[0];
+  }  // eo get schema struct
 
 
-    // -----------------------
-    // get tables info
+  /**
+  * Get table names.
+  * @see OgerDbStruct::getTableNames().
+  */
+  public function getTableNames($opts) {
 
     $pstmt = $this->conn->prepare("
         SELECT TABLE_NAME
@@ -97,18 +93,13 @@ class OgerDbStructMysql extends OgerDbStruct {
     $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
 
+    $tableNames = array()
     foreach ($tableRecords as $tableRecord) {
+      $tableNames[strtolower($tableName)] = $tableRecord["TABLE_NAME"];
+    }
 
-      $tableName = $tableRecord["TABLE_NAME"];
-      $tableKey = strtolower($tableName);
-
-      $struct["__TABLE_NAMES__"][$tableKey] = $tableName;
-      $struct["__TABLES__"][$tableKey] = $this->getTableStruct($tableName);
-
-    }  // eo table loop
-
-    return $struct;
-  }  // eo get db structure
+    return $tableNames;
+  }  // eo get table names
 
 
   /**
