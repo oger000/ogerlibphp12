@@ -158,6 +158,24 @@ abstract class OgerDbStruct {
 
 
   /**
+  * Prepares and executes an sql statement.
+  * Respects dry-run and logging parameters.
+  * @param $stmt SQL statement.
+  * @param $values Associative array with parameter => value pairs.
+  */
+  public function executeStmt($stmt, $values = array()) {
+    $stmts = explode(";", $stmt);
+    foreach ($stmts as $stmt) {
+      $this->log(static::LOG_DEBUG, "$stmt\n");
+      if (!$this->getParam("dry-run")) {
+        $pstmt = $this->conn->prepare($stmt);
+        $pstmt->execute();
+      }
+    }
+  }  // eo execute stmt
+
+
+  /**
   * Get the database structure.
   * Keys for table and column names are in lowercase, so identifier cannot
   * be used with different case. The structure does not contain privileges.
@@ -167,54 +185,19 @@ abstract class OgerDbStruct {
   *   to restrict the included tables. If empty all tables are included.
   * @return Array with database structure.
   */
-  public function getDbStruct($opts) {
+  public function getDbStruct($opts = array()) {
 
     $struct = $this->createStructHead();
     $struct["__SCHEMA_META__"] = $this->getDbSchemaStruct();
 
-    $tableNames = $this->getTableNames($opts);
-
-    foreach ($tableNames as $tableName) {
-      $struct[
-
+    $struct["__TABLE_NAMES__"] = $this->getTableNames($opts);
+    foreach ($struct["__TABLE_NAMES__"] as $tableKey => $tableName) {
+      $struct["__TABLES__"][$tableKey] = $this->getTableStruct($tableName);
     }  // eo table loop
 
 
     return $struct;
   }  // eo get db struct
-
-
-  /**
-  * Get the database schema structure.
-  * @return Array with database schema.
-  */
-  abstract public function getDbSchemaStruct();
-
-
-  /**
-  * Get the table names of the database.
-  * @param $opts Optional options array where the key is the option name.<br>
-  * Valid options are:<br>
-  * - tablesWhere: A where condition that is passed as WHERE condition to the tables
- *    SELECT string to restrict the included tables. If empty all tables are included.
-  * @return Array with table names.
-  */
-  abstract public function getTableNames($opts);
-
-
-  /**
-  * Get the structure of one table.
-  * @return Array with the table structure.
-  */
-  abstract public function getTableStruct();
-
-
-
-
-
-
-
-
 
 
   /**
@@ -239,12 +222,21 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Get the database structure.
-  * Keys for table and column names are in lowercase, so identifier cannot
-  * be used with different case. The structure does not contain privileges.
-  * @return Array with database structure.
+  * Get the database schema structure.
+  * @return Array with database schema.
   */
-  abstract public function getDbStruct();
+  abstract public function getDbSchemaStruct();
+
+
+  /**
+  * Get the table names of the database.
+  * @param $opts Optional options array where the key is the option name.<br>
+  * Valid options are:<br>
+  * - tablesWhere: A where condition that is passed as WHERE condition to the tables
+  *   SELECT string to restrict the included tables. If empty all tables are included.
+  * @return Associative array with table names. The array keys contain a table id.
+  */
+  abstract public function getTableNames($opts);
 
 
   /**
@@ -269,7 +261,7 @@ abstract class OgerDbStruct {
 
     $this->checkDriverCompat($newStruct["__DRIVER_NAME__"], true);
 
-    if (!$oldStruct) {
+    if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
     }
 

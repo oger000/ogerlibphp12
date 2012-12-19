@@ -93,9 +93,9 @@ class OgerDbStructMysql extends OgerDbStruct {
     $tableRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
 
-    $tableNames = array()
+    $tableNames = array();
     foreach ($tableRecords as $tableRecord) {
-      $tableNames[strtolower($tableName)] = $tableRecord["TABLE_NAME"];
+      $tableNames[strtolower($tableRecord["TABLE_NAME"])] = $tableRecord["TABLE_NAME"];
     }
 
     return $tableNames;
