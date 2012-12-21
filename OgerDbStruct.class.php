@@ -86,8 +86,8 @@ abstract class OgerDbStruct {
     $struct = $this->createStructHead();
     $struct["__SCHEMA_META__"] = $this->getDbSchemaStruct();
 
-    $struct["__TABLE_NAMES__"] = $this->getTableNames($opts);
-    foreach ($struct["__TABLE_NAMES__"] as $tableKey => $tableName) {
+    $tableNames = $this->getTableNames($opts);
+    foreach ($tableNames as $tableKey => $tableName) {
       $struct["__TABLES__"][$tableKey] = $this->getTableStruct($tableName);
     }  // eo table loop
 
@@ -103,15 +103,17 @@ abstract class OgerDbStruct {
   public function createStructHead() {
 
     // preapre db struct array
-    $struct = array();
+    $startTime = time();
 
-    $struct["__DRIVER_NAME__"] = $this->driverName;
-    $struct["__DRIVER_INDEPENDENT__"] = false;
-    $struct["__SERIAL__"] = time();
-    $struct["__TIME__"] = date("c", $struct["__SERIAL__"]);
+    $struct = array();
+    $struct["__DBSTRUCT_META__"] = array(
+      "__DRIVER_NAME__" => $this->driverName,
+      "__DRIVER_INDEPENDENT__" => false,
+      "__SERIAL__" => $startTime,
+      "__TIME__" => date("c", $startTime),
+    );
 
     $struct["__SCHEMA_META__"] = array();
-    $struct["__TABLE_NAMES__"] = array();
     $struct["__TABLES__"] = array();
 
     return $struct;
@@ -156,7 +158,7 @@ abstract class OgerDbStruct {
    */
   public function addDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
+    $this->checkDriverCompat($newStruct);
 
     if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
@@ -287,7 +289,7 @@ abstract class OgerDbStruct {
   */
   public function updateDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
+    $this->checkDriverCompat($newStruct);
 
     // get old structure before adding missing parts
     // because we dont have to refresh that
@@ -384,7 +386,7 @@ abstract class OgerDbStruct {
   */
   public function refreshDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
+    $this->checkDriverCompat($newStruct);
 
     // get old structure before adding missing parts
     // because we dont have to update that
@@ -454,7 +456,7 @@ abstract class OgerDbStruct {
   */
   public function reorderDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
+    $this->checkDriverCompat($newStruct);
 
     if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
@@ -481,7 +483,7 @@ abstract class OgerDbStruct {
   */
   public function cleanupDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
+    $this->checkDriverCompat($newStruct);
 
     if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
@@ -544,7 +546,7 @@ abstract class OgerDbStruct {
   */
   public function forceDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($newStruct["__DRIVER_NAME__"]);
+    $this->checkDriverCompat($newStruct);
 
     if ($oldStruct === null) {
       $oldStruct = $this->getDbStruct();
@@ -729,10 +731,10 @@ abstract class OgerDbStruct {
 
   /**
   * Check for driver compatibility.
-  * @param $driverName PDO driver name.
+  * @param $struct Database structure array.
   * @param $throw Throw an exception if not compatible.
   */
-  abstract public function checkDriverCompat($driverName);
+  abstract public function checkDriverCompat($dbStruct);
 
 
   /**

@@ -36,9 +36,10 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Check for driver compatibility.
   * @see OgerDbStruct::checkDriverCompat().
   */
-  public function checkDriverCompat($driverName) {
+  public function checkDriverCompat($dbStruct) {
+    $driverName = $dbStruct["__DBSTRUCT_META__"]["__DRIVER_NAME__"]
     if ($driverName != "mysql") {
-      throw new Exception ("Driver '$driverName' not compatible. 'mysql' expected.");
+      throw new Exception ("Driver '$driverName' not compatible. Only driver 'mysql' supported.");
     }
   }  // eo check driver compat
 
@@ -164,7 +165,6 @@ class OgerDbStructMysql extends OgerDbStruct {
       $columnName = $columnRecord["COLUMN_NAME"];
       $columnKey = strtolower($columnName);
 
-      $struct["__COLUMN_NAMES__"][$columnKey] = $columnName;
       $struct["__COLUMNS__"][$columnKey] = $columnRecord;
 
     }  // eo column loop
@@ -201,8 +201,6 @@ class OgerDbStructMysql extends OgerDbStruct {
       elseif (!$indexRecord["NON_UNIQUE"]) {
         $indexType = "UNIQUE";
       }
-
-      $struct["__INDEX_NAMES__"][$indexKey] = $indexName;
 
       // the meta info is taken from the last column info which overwrites the prevous meta info
       $struct["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_NAME"] = $indexName;
@@ -259,8 +257,6 @@ class OgerDbStructMysql extends OgerDbStruct {
 
       $fkName = $fkRecord["CONSTRAINT_NAME"];
       $fkKey = strtolower($fkName);
-
-      $struct["__FOREIGN_KEY_NAMES__"][$fkKey] = $fkName;
 
       // the meta info is taken from the last entry info which overwrites the prevous meta info
       $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"] = $fkName;
