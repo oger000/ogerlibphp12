@@ -715,11 +715,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colName $columnDef";
       $afterColumn = $colName;
 
-      $this->log(static::LOG_DEBUG, "$stmt\n");
-      if (!$this->getParam("dry-run")) {
-        $pstmt = $this->conn->prepare($stmt);
-        $pstmt->execute();
-      }
+      $this->executeStmt($stmt);
 
     }  // eo common column loop
 

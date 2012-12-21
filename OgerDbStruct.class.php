@@ -68,114 +68,7 @@ abstract class OgerDbStruct {
   }  // eo construct
 
 
-  /**
-  * Set parameter.
-  * @param $name Parameter name.
-  * Valid parameter names are: dryrun, loglevel.
-  * @param $value New parameter value.
-  * @return Old parameter value.
-  */
-  public function setParam($name, $value) {
-    $ret = $this->getParam($name);
-    $this->params[$name] = $value;
-    return $ret;
-  }  // eo set param
 
-  /**
-  * Get parameter.
-  * @param $name Parameter name.
-  * @return Old parameter value.
-  */
-  public function getParam($name) {
-    return $this->params[$name];
-  }  // eo get param
-
-  /**
-  * Get all parameters.
-  * @return All parameter names and values.
-  */
-  public function getParams() {
-    return $this->params;
-  }  // eo get params
-
-
-  /**
-  * Add text to log buffer if log level fits.
-  * @param $msgLogLevel Log level for this log message.
-  * @param $text Text added to the log buffer.
-  */
-  public function log($msgLogLevel, $text) {
-    if ($msgLogLevel <= $this->getParam("log-level")) {
-      if ($this->getParam("echo-log")) {
-        echo $text;
-      }
-      $this->addLog($text);
-      $this->addLog($text);
-    }
-  }  // eo add log for log level
-
-  /**
-  * Add text to log buffer.
-  * @param $text Text added to the log buffer.
-  */
-  public function addLog($text) {
-    $this->log .= $text;
-  }  // eo add log
-
-  /**
-  * Get log text.
-  * @return Log content.
-  */
-  public function getLog() {
-    return $this->log;
-  }  // eo get log
-
-  /**
-  * Flush log buffer.
-  * @return Log content.
-  */
-  public function flushLog() {
-    $ret = $this->log;
-    $this->log = "";
-    return $ret;
-  }  // eo flush log
-
-
-  /**
-  * Check for driver compatibility.
-  * @param $driverName PDO driver name.
-  * @param $throw Throw an exception if not compatible.
-  */
-  abstract public function checkDriverCompat($driverName);
-
-
-  /**
-  * Quote a table or column name.
-  * @param $name Name to be quoted.
-  */
-  public function quoteName($name) {
-    return "{$this->quoteNamBegin}$name{$this->quoteNamEnd}";
-  }  // eo quote name
-
-
-  /**
-  * Prepares and executes an sql statement.
-  * Respects dry-run and logging parameters.
-  * @param $stmt SQL statement.
-  * @param $values Associative array with parameter => value pairs.
-  */
-  public function executeStmt($stmt, $values = array()) {
-    $stmts = explode(";", $stmt);
-    foreach ($stmts as $stmt) {
-      if ($stmt) {
-        $this->log(static::LOG_DEBUG, "$stmt\n");
-        if (!$this->getParam("dry-run")) {
-          $pstmt = $this->conn->prepare($stmt);
-          $pstmt->execute();
-        }
-      }
-    }
-  }  // eo execute stmt
 
 
   /**
@@ -758,7 +651,121 @@ abstract class OgerDbStruct {
 
 
 
+  // ############################################
+  // some helper methods
 
+
+  /**
+  * Set parameter.
+  * @param $name Parameter name.
+  * Valid parameter names are: dryrun, loglevel.
+  * @param $value New parameter value.
+  * @return Old parameter value.
+  */
+  public function setParam($name, $value) {
+    $ret = $this->getParam($name);
+    $this->params[$name] = $value;
+    return $ret;
+  }  // eo set param
+
+  /**
+  * Get parameter.
+  * @param $name Parameter name.
+  * @return Old parameter value.
+  */
+  public function getParam($name) {
+    return $this->params[$name];
+  }  // eo get param
+
+  /**
+  * Get all parameters.
+  * @return All parameter names and values.
+  */
+  public function getParams() {
+    return $this->params;
+  }  // eo get params
+
+
+  /**
+  * Add text to the log buffer if log level fits.
+  * @param $msgLogLevel Log level for this log message.
+  * @param $text Text added to the log buffer.
+  */
+  public function log($msgLogLevel, $text) {
+    if ($msgLogLevel <= $this->getParam("log-level")) {
+      if ($this->getParam("echo-log")) {
+        echo $text;
+      }
+      $this->addLog($text);
+    }
+  }  // eo add text for log level
+
+  /**
+  * Add text to log buffer.
+  * @param $text Text added to the log buffer.
+  */
+  public function addLog($text) {
+    $this->log .= $text;
+  }  // eo add log
+
+  /**
+  * Get log text.
+  * @return Log content.
+  */
+  public function getLog() {
+    return $this->log;
+  }  // eo get log
+
+  /**
+  * Flush log buffer.
+  * @return Log content.
+  */
+  public function flushLog() {
+    $ret = $this->log;
+    $this->log = "";
+    return $ret;
+  }  // eo flush log
+
+
+  /**
+  * Check for driver compatibility.
+  * @param $driverName PDO driver name.
+  * @param $throw Throw an exception if not compatible.
+  */
+  abstract public function checkDriverCompat($driverName);
+
+
+  /**
+  * Quote a table or column name.
+  * @param $name Name to be quoted.
+  */
+  public function quoteName($name) {
+    return "{$this->quoteNamBegin}$name{$this->quoteNamEnd}";
+  }  // eo quote name
+
+
+  /**
+  * Prepares and executes an sql statement.
+  * Respects dry-run and logging parameters.
+  * @param $stmt SQL statement.
+  * @param $values Associative array with parameter => value pairs.
+  */
+  public function executeStmt($stmt, $values = array()) {
+    $stmts = explode(";", $stmt);
+    foreach ($stmts as $stmt) {
+      if ($stmt) {
+        $this->log(static::LOG_DEBUG, "$stmt;\n");
+        if (!$this->getParam("dry-run")) {
+          $pstmt = $this->conn->prepare($stmt);
+          $pstmt->execute();
+        }
+      }
+    }
+  }  // eo execute stmt
+
+
+  // oe helper methods
+  // ###############################
 
 }  // eo class
 
