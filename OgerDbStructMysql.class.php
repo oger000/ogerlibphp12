@@ -37,7 +37,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @see OgerDbStruct::checkDriverCompat().
   */
   public function checkDriverCompat($dbStruct) {
-    $driverName = $dbStruct["__DBSTRUCT_META__"]["__DRIVER_NAME__"]
+    $driverName = $dbStruct["__DBSTRUCT_META__"]["__DRIVER_NAME__"];
     if ($driverName != "mysql") {
       throw new Exception ("Driver '$driverName' not compatible. Only driver 'mysql' supported.");
     }

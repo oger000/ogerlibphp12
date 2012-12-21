@@ -70,9 +70,6 @@ abstract class OgerDbStruct {
   }  // eo construct
 
 
-
-
-
   /**
   * Get the database structure.
   * Keys for table and column names are in lowercase, so identifier cannot
@@ -92,7 +89,6 @@ abstract class OgerDbStruct {
     foreach ($tableNames as $tableKey => $tableName) {
       $struct["__TABLES__"][$tableKey] = $this->getTableStruct($tableName);
     }  // eo table loop
-
 
     return $struct;
   }  // eo get db struct
@@ -158,7 +154,7 @@ abstract class OgerDbStruct {
   *        - noForeignKeys<br>
   */
   /*
-   * TODO check if needed table structure infos are realy driver independent
+   * TODO check if needed table meta structure infos are realy driver independent
    */
   public function addDbStruct($newStruct, $oldStruct = null, $opts = array()) {
 
@@ -172,7 +168,7 @@ abstract class OgerDbStruct {
 
       $newTableName = $newTableStruct["__TABLE_META__"]["TABLE_NAME"];
       $oldTableStruct = $oldStruct["__TABLES__"][$newTableKey];
-      if ($oldTableStruct === null) {
+      if (!$oldTableStruct) {
         $this->addTable($newTableStruct, array("noForeignKeys" => true));
       }
       else {
@@ -251,10 +247,10 @@ abstract class OgerDbStruct {
   * Create a column definition statement.
   * @param $columnStruct  Array with column definition.
   * @param $opts Optional options array. Key is option name.<br>
-  * Valid options are:<br>
-  * - afterColumnName: The column name after which this column should be placed.
-  *   Null means append after the last column.
-  *   Any other empty value means insert on first position.
+  *        Valid options are:<br>
+  *        - afterColumnName: The column name after which this column should be placed.
+  *          Null means append after the last column.
+  *          Any other empty value means insert on first position.
   * @return The SQL statement part for a column definition.
   */
   abstract public function columnDefStmt($columnStruct, $opts = array());
@@ -318,6 +314,11 @@ abstract class OgerDbStruct {
   * Update an existing table and add missing columns.
   * @param $newTableStruct Array with the new table structure.
   * @param $oldTableStruct Array with the old table structure.
+  * @param $opts Optional options array where the key is the option name.<br>
+  *        Valid options are:<br>
+  *        - noRefresh<br>
+  *        - noIndices<br>
+  *        - noForeignKeys<br>
   */
   public function updateTable($newTableStruct, $oldTableStruct, $opts = array()) {
 
