@@ -79,7 +79,7 @@ abstract class OgerDbStruct {
   * be used with different case. The structure does not contain privileges.
   * @param $opts Optional options array where the key is the option name.<br>
   *        Valid options are:<br>
-  *        - tablesWhere: A where condition that is passed to the getTableNames() method
+  *        - whereTables: A where condition that is passed to the getTableNames() method
   *          to restrict the included tables. If empty all tables are included.
   * @return Array with database structure.
   */
@@ -133,7 +133,7 @@ abstract class OgerDbStruct {
   * Get the table names of the database.
   * @param $opts Optional options array where the key is the option name.<br>
   *        Valid options are:<br>
-  *        - tablesWhere: A where condition that is passed as WHERE condition to the tables
+  *        - whereTables: A where condition that is passed as WHERE condition to the tables
   *          SELECT string to restrict the included tables. If empty all tables are included.
   * @return Associative array with table names. The array keys contain a table id.
   */

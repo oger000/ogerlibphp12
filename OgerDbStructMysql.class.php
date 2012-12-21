@@ -86,8 +86,8 @@ class OgerDbStructMysql extends OgerDbStruct {
           WHERE TABLE_CATALOG=:catalogName AND
                 TABLE_SCHEMA=:dbName
         ";
-    if ($opts["tablesWhere"]) {
-      $stmt .= " AND {$opts["tablesWhere"]}";
+    if ($opts["whereTables"]) {
+      $stmt .= " AND {$opts["whereTables"]}";
     }
     $pstmt = $this->conn->prepare($stmt);
     $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName));
