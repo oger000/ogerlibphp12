@@ -18,6 +18,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   protected $quoteNamEnd = '`';
 
   private $defCatalogName = "def";
+  private $sqlServerOs;
 
 
   /**
@@ -25,11 +26,33 @@ class OgerDbStructMysql extends OgerDbStruct {
    * @throw Throws an exception if the driver name does not fit.
    */
   public function __construct($conn, $dbName) {
+
     parent::__construct($conn, $dbName);
+
     if ($this->driverName != "mysql") {
       throw new Exception("Invalid driver {$this->driverName} for " . __CLASS__);
     }
+
+    // get platform - needed for case sensitive check.
+    $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE 'version_compile_os'");
+    $pstmt->execute();
+    $records = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+    $this->sqlServerOs = $records[0];
+
   }  // eo constructor
+
+
+  /**
+  * Get the database structure.
+  * @see OgerDbStruct::getDbStruct().
+  */
+  public function getDbStruct($opts = array()) {
+
+    $struct = parent::getDbStruct($opts);
+
+    return $struct;
+  }  // eo get db struct
 
 
   /**
@@ -515,6 +538,25 @@ class OgerDbStructMysql extends OgerDbStruct {
     $newTableMeta = $newTableStruct["__TABLE_META__"];
     $oldTableMeta = $oldTableStruct["__TABLE_META__"];
 
+    // table name - check for different case
+    $changed = false;
+    if ($newTableMeta["TABLE_NAME"] != $oldTableMeta["TABLE_NAME"]) {
+      $changed = true;
+      // to nothing if only differ in case on windows
+      if (strtolower($newTableMeta["TABLE_NAME"]) == strtolower($oldTableMeta["TABLE_NAME"]) &&
+          stripos("win", $this->sqlServerOs) !== false ) {
+        $changed = false;
+      }
+    }
+    if ($changed) {
+      $newTableName = $this->quoteName($newTableMeta["TABLE_NAME"]);
+      $oldTableName = $this->quoteName($oldTableMeta["TABLE_NAME"]);
+      $stmt = "RENAME TABLE {$newTableName} TO {$oldTableName}";
+      $this->executeStmt($stmt);
+    }
+
+    // table defaults
+    $changed = false;
     if ($newTableMeta["TABLE_COLLATION"] != $oldTableMeta["TABLE_COLLATION"]) {
       $changed = true;
     }
@@ -523,10 +565,10 @@ class OgerDbStructMysql extends OgerDbStruct {
     }
 
     if ($changed) {
-      $stmt = "ALTER TABLE " .
-              $this->quoteName($oldTableMeta["TABLE_NAME"]) .
-              " ENGINE " . $newTableMeta["ENGINE"];
-              " COLLATE " . $newTableMeta["TABLE_COLLATION"];
+      $stmt .= "ALTER TABLE " .
+               $this->quoteName($oldTableMeta["TABLE_NAME"]) .
+               " ENGINE " . $newTableMeta["ENGINE"];
+               " COLLATE " . $newTableMeta["TABLE_COLLATION"];
     }
 
     return $stmt;
@@ -538,6 +580,10 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @see OgerDbStruct::columnDefUpdateStmt().
   */
   public function columnDefUpdateStmt($newColumnStruct, $oldColumnStruct) {
+
+    if ($newColumnStruct["COLUMN_NAME"] != $oldColumnStruct["COLUMN_NAME"]) {
+      $changed = true;
+    }
 
     if ($newColumnStruct["COLUMN_TYPE"] != $oldColumnStruct["COLUMN_TYPE"]) {
       $changed = true;
@@ -560,6 +606,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     if ($changed) {
       $stmt = "ALTER TABLE " . $this->quoteName($oldColumnStruct["TABLE_NAME"]) .
               " CHANGE COLUMN " . $this->quoteName($oldColumnStruct["COLUMN_NAME"]) .
+              " " . $this->quoteName($newColumnStruct["COLUMN_NAME"]) .
               " " . $this->columnDefStmt($newColumnStruct);
     }
 
@@ -580,7 +627,8 @@ class OgerDbStructMysql extends OgerDbStruct {
     $indexName = $this->quoteName($oldIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
 
     // create change statement
-    if ($newIndexSql != $oldIndexStruct) {
+    if ($newIndexSql != $oldIndexSql) {
+      $this->log(static::LOG_NOTICE, "OLD: $oldIndexSql\nNEW: $newIndexSql\n";
       $stmt = "ALTER TABLE $tableName DROP INDEX $indexName;" .
               "ALTER TABLE $tableName ADD $newIndexSql";
     }
@@ -598,17 +646,18 @@ class OgerDbStructMysql extends OgerDbStruct {
     $newFkSql = $this->foreignKeyDefStmt($newFkStruct);
     $oldFkSql = $this->foreignKeyDefStmt($oldFkStruct);
 
-    $tableName = $this->quoteName($oldIndexStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
-    $fkName = $this->quoteName($oldIndexStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+    $tableName = $this->quoteName($oldFkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
+    $fkName = $this->quoteName($oldFkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
 
     // create change statement
-    if ($newFkSql != $oldFkStruct) {
+    if ($newFkSql != $oldFkSql) {
+      $this->log(static::LOG_NOTICE, "OLD: $oldFkSql\nNEW: $newFkSql\n";
       $stmt = "ALTER TABLE $tableName DROP FOREIGN KEY $fkName;" .
               "ALTER TABLE $tableName ADD $newFkSql";
     }
 
     return $stmt;
-  }  // eo update index
+  }  // eo update foreign key
 
 
   /**

@@ -4,7 +4,6 @@
 #LICENSE END
 */
 
-// TODO case insensitive -> case sensitive change for table names
 // TODO TEST TEST TEST
 
 /**
