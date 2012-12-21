@@ -17,6 +17,8 @@
 * No renaming is provided.<br>
 * This class is mixed up with OgerDbStructMysql and maybe contains code that is
 * not driver independent and should go to to OgerDbStructMysql.<br>
+* The public interface and splitting into methods is horrible, so everything beside
+* the above mentioned main top level methods is object of changing.
 */
 abstract class OgerDbStruct {
 
@@ -76,9 +78,9 @@ abstract class OgerDbStruct {
   * Keys for table and column names are in lowercase, so identifier cannot
   * be used with different case. The structure does not contain privileges.
   * @param $opts Optional options array where the key is the option name.<br>
-  * Valid options are:<br>
-  * - tablesWhere: A where condition that is passed to the getTableNames() method
-  *   to restrict the included tables. If empty all tables are included.
+  *        Valid options are:<br>
+  *        - tablesWhere: A where condition that is passed to the getTableNames() method
+  *          to restrict the included tables. If empty all tables are included.
   * @return Array with database structure.
   */
   public function getDbStruct($opts = array()) {
@@ -130,9 +132,9 @@ abstract class OgerDbStruct {
   /**
   * Get the table names of the database.
   * @param $opts Optional options array where the key is the option name.<br>
-  * Valid options are:<br>
-  * - tablesWhere: A where condition that is passed as WHERE condition to the tables
-  *   SELECT string to restrict the included tables. If empty all tables are included.
+  *        Valid options are:<br>
+  *        - tablesWhere: A where condition that is passed as WHERE condition to the tables
+  *          SELECT string to restrict the included tables. If empty all tables are included.
   * @return Associative array with table names. The array keys contain a table id.
   */
   abstract public function getTableNames($opts);
@@ -151,7 +153,9 @@ abstract class OgerDbStruct {
   * @param $newStruct Array with the new database structure.
   * @param $oldStruct Optional array with the old database structure.
   *        If not present it is located from the associated database.
-  * @param $opts Optional options array.
+  * @param $opts Optional options array. Keys are options.<br>
+  *        Valid optios are:<br>
+  *        - noForeignKeys<br>
   */
   /*
    * TODO check if needed table structure infos are realy driver independent
@@ -201,7 +205,9 @@ abstract class OgerDbStruct {
   * Add a table to the database structure.
   * @param $tableStruct Array with the table definition.
   * @param $opts Optional option array. Key is option.
-  *        Valid options: noIndices, noForeignKeys.
+  *        Valid options:<br>
+  *        - noIndices<br>
+  *        - noForeignKeys
   */
   public function addTable($tableStruct, $opts) {
     $stmt = $this->tableDefCreateStmt($tableStruct, $opts);
@@ -224,6 +230,8 @@ abstract class OgerDbStruct {
   * @param $tableStruct Array with the table definition.
   * @param $opts Optional options array.
   * @return The SQL statement for table definition.
+  * @see OgerDbStruct::tableDefCreateStmt() and
+  *      OgerDbStruct::addTable() for option description.
   */
   abstract public function tableDefCreateStmt($tableStruct, $opts);
 
