@@ -4,6 +4,7 @@
 #LICENSE END
 */
 
+// TODO cleanup public interface
 // TODO TEST TEST TEST
 
 /**
@@ -24,6 +25,9 @@ abstract class OgerDbStruct {
   const LOG_LOG = 1;
   const LOG_DEBUG = 5;
   const LOG_NOTICE = 7;
+
+  protected $newDbStruct;
+  protected $oldDbStruct;
 
   protected $conn;  ///< PDO instance created elsewhere.
   protected $dbName;  ///< Database name.
@@ -155,7 +159,7 @@ abstract class OgerDbStruct {
   /*
    * TODO check if needed table meta structure infos are realy driver independent
    */
-  public function addDbStruct($newStruct, $oldStruct = null, $opts = array()) {
+  public function addDbStruct($opts = array()) {
 
     $this->checkDriverCompat($newStruct);
 
@@ -662,7 +666,43 @@ abstract class OgerDbStruct {
 
 
   // ############################################
-  // some helper methods
+  // some helper methods and setter/getter
+
+
+  /**
+  * Set new database structure array.
+  * @param $dbStruct New database structure array.
+  */
+  public function setNewDbStruct($dbStruct) {
+    $this->newDbStruct = $dbStruct;
+  }  // eo set new dbstruct
+
+  /**
+  * Get new database structure array.
+  * @return New database structure array.
+  */
+  public function getNewDbStruct() {
+    return $this->newDbStruct;
+  }  // eo get new dbstruct
+
+  /**
+  * Set old database structure array.
+  * Use with care. The intention is that the old database structure
+  * is detected automatically if not present. Mainly used
+  * to set the old database structure to null to fore reread.
+  * @param $dbStruct Old database structure array.
+  */
+  public function setOldDbStruct($dbStruct) {
+    $this->oldDbStruct = $dbStruct;
+  }  // eo set old dbstruct
+
+  /**
+  * Get old database structure array.
+  * @return Old database structure array.
+  */
+  public function getOldDbStruct() {
+    return $this->oldDbStruct;
+  }  // eo get old dbstruct
 
 
   /**
