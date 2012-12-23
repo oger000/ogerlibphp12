@@ -26,9 +26,6 @@ abstract class OgerDbStruct {
   const LOG_DEBUG = 5;
   const LOG_NOTICE = 7;
 
-  protected $newDbStruct;
-  protected $oldDbStruct;
-
   protected $conn;  ///< PDO instance created elsewhere.
   protected $dbName;  ///< Database name.
   protected $driverName;  ///< Driver name.
@@ -75,26 +72,13 @@ abstract class OgerDbStruct {
 
   /**
   * Get the database structure.
-  * Keys for table and column names are in lowercase, so identifier cannot
-  * be used with different case. The structure does not contain privileges.
   * @param $opts Optional options array where the key is the option name.<br>
   *        Valid options are:<br>
-  *        - whereTables: A where condition that is passed to the getTableNames() method
+  *        - whereTables: A where condition that is passed to the table search
   *          to restrict the included tables. If empty all tables are included.
-  * @return Array with database structure.
+  * @return An array with the database structure.
   */
-  public function getDbStruct($opts = array()) {
-
-    $struct = $this->createStructHead();
-    $struct["__SCHEMA_META__"] = $this->getDbSchemaStruct();
-
-    $tableNames = $this->getTableNames($opts);
-    foreach ($tableNames as $tableKey => $tableName) {
-      $struct["__TABLES__"][$tableKey] = $this->getTableStruct($tableName);
-    }  // eo table loop
-
-    return $struct;
-  }  // eo get db struct
+  public public function getDbStruct($opts = array());
 
 
   /**
@@ -119,24 +103,6 @@ abstract class OgerDbStruct {
 
     return $struct;
   }  // eo create struct head
-
-
-  /**
-  * Get the database schema structure.
-  * @return Array with database schema.
-  */
-  abstract public function getDbSchemaStruct();
-
-
-  /**
-  * Get the table names of the database.
-  * @param $opts Optional options array where the key is the option name.<br>
-  *        Valid options are:<br>
-  *        - whereTables: A where condition that is passed as WHERE condition to the tables
-  *          SELECT string to restrict the included tables. If empty all tables are included.
-  * @return Associative array with table names. The array keys contain a table id.
-  */
-  abstract public function getTableNames($opts);
 
 
   /**

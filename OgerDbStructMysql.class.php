@@ -20,6 +20,9 @@ class OgerDbStructMysql extends OgerDbStruct {
   private $defCatalogName = "def";
   private $sqlServerOs;
 
+  private $newDbStruct;
+  private $oldDbStruct;
+
 
   /**
    * @see OgerDbStruct::__construct().
@@ -47,34 +50,22 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Get the database structure.
   * @see OgerDbStruct::getDbStruct().
   */
+  /**
+  * Get the database structure.
+  * Keys for table and column names are in lowercase, so identifier cannot
+  * be used with different case. The structure does not contain privileges.
+  * @param $opts Optional options array where the key is the option name.<br>
+  *        Valid options are:<br>
+  *        - whereTables: A where condition that is passed to the getTableNames() method
+  *          to restrict the included tables. If empty all tables are included.
+  * @return Array with database structure.
+  */
   public function getDbStruct($opts = array()) {
 
-    $struct = parent::getDbStruct($opts);
+    // get structure head
+    $struct = $this->createStructHead();
 
-    return $struct;
-  }  // eo get db struct
-
-
-  /**
-  * Check for driver compatibility.
-  * @see OgerDbStruct::checkDriverCompat().
-  */
-  public function checkDriverCompat($dbStruct) {
-    $driverName = $dbStruct["__DBSTRUCT_META__"]["__DRIVER_NAME__"];
-    if ($driverName != "mysql") {
-      throw new Exception ("Driver '$driverName' not compatible. Only driver 'mysql' supported.");
-    }
-  }  // eo check driver compat
-
-
-  /**
-  * Get database schema structure for a mysql database.
-  * @see OgerDbStruct::getDbSchemaStruct().
-  * @throw Throws an exception if more than one schema is found for the given database name
-  *        or no schema is found.
-  */
-  public function getDbSchemaStruct() {
-
+    // get schema structure
     $pstmt = $this->conn->prepare("
         SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME
           FROM INFORMATION_SCHEMA.SCHEMATA
@@ -88,21 +79,31 @@ class OgerDbStructMysql extends OgerDbStruct {
     if (count($schemaRecords) > 1) {
       throw new Exception("More than one schema found for database name {$this->dbName}.");
     }
-
     if (count($schemaRecords) < 1) {
       throw new Exception("No schema found for database name {$this->dbName}.");
     }
+    $struct["__SCHEMA_META__"] = $schemaRecords[0];
 
-    return $schemaRecords[0];
-  }  // eo get schema struct
+    $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE '%case%'");
+    $pstmt->execute();
+    $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+    $struct["__SCHEMA_META__"] = array_merge($schemaRecords, $struct["__SCHEMA_META__"]);
+
+    $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE '%compile%'");
+    $pstmt->execute();
+    $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+    $struct["__SCHEMA_META__"] = array_merge($schemaRecords, $struct["__SCHEMA_META__"]);
+
+    $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE '%version%'");
+    $pstmt->execute();
+    $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+    $struct["__SCHEMA_META__"] = array_merge($schemaRecords, $struct["__SCHEMA_META__"]);
 
 
-  /**
-  * Get table names.
-  * @see OgerDbStruct::getTableNames().
-  */
-  public function getTableNames($opts) {
-
+    // get table structure
     $stmt = "
         SELECT TABLE_NAME
           FROM INFORMATION_SCHEMA.TABLES
@@ -119,11 +120,13 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $tableNames = array();
     foreach ($tableRecords as $tableRecord) {
-      $tableNames[strtolower($tableRecord["TABLE_NAME"])] = $tableRecord["TABLE_NAME"];
-    }
+      $tableName = $tableRecord["TABLE_NAME"];
+      $tableKey = strtolower($tableName);
+      $struct["__TABLES__"][$tableKey] = $this->getTableStruct($tableName);
+    }  // eo table loop
 
-    return $tableNames;
-  }  // eo get table names
+    return $struct;
+  }  // eo get db struct
 
 
   /**
@@ -326,6 +329,45 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     return $struct;
   }  // eo get table struc
+
+
+
+
+
+
+
+
+
+  /**
+   * Precheck before process changes.
+  */
+  private function preProcessCheck($newDbStruct, $oldDbStruct) {
+    $driverName = $newDbStruct["__DBSTRUCT_META__"]["__DRIVER_NAME__"];
+    if ($driverName != "mysql") {
+      throw new Exception ("Driver '$driverName' not compatible. Only driver 'mysql' supported.");
+    }
+
+    if (!$newDbStruct && !$this->newDbStruct) {
+      throw new Exception ("New database structure required.");
+    }
+
+    if (!$this->oldDbStruct) {
+      $this->oldDbStruct = $this->getDbStruct();
+    }
+
+  }  // eo prechecks
+
+
+
+
+
+
+
+
+
+
+
+
 
 
   /**
