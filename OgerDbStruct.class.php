@@ -11,6 +11,9 @@
 * Handle database structure.
 * Supported database systems are: Only MySql by now.<br>
 * No renaming is provided by design.<br>
+* For all option arrays there are additional options possible in the
+* driver dependent implementation - so see there too.
+
 */
 abstract class OgerDbStruct {
 
@@ -63,12 +66,12 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Get the database structure.
+  * Get the current database structure.
   * @param $opts Optional options array where the key is the option name.<br>
   *        Valid options are:<br>
-  *        - whereTables: A where condition that is passed to the table search
-  *          to restrict the included tables. If empty all tables are included.
-  * @return An array with the database structure.
+  *        - whereTables: A where condition to restrict the included tables.
+  *          If empty all tables are included.
+  * @return Array with database structure.
   */
   public public function getDbStruct($opts = array());
 
@@ -98,123 +101,15 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Get the database structure for one table.
-  * @param $tableName Name of the table for which we want to get the structure.
-  * @return Array with table structure.
-  */
-  abstract public function getTableStruct($tablename);
-
-
-  /**
   * Add missing tables and columns to the database.
   * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the old database structure.
-  *        If not present it is located from the associated database.
   * @param $opts Optional options array. Keys are options.<br>
   *        Valid optios are:<br>
   *        - noForeignKeys<br>
   */
-  /*
-   * TODO check if needed table meta structure infos are realy driver independent
-   */
-  public function addDbStruct($opts = array()) {
-
-    $this->checkDriverCompat($refStruct);
-
-    if ($curStruct === null) {
-      $curStruct = $this->getDbStruct();
-    }
-
-    foreach ($refStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
-
-      $refTableName = $refTableStruct["__TABLE_META__"]["TABLE_NAME"];
-      $curTableStruct = $curStruct["__TABLES__"][$refTableKey];
-      if (!$curTableStruct) {
-        $this->addTable($refTableStruct, array("noForeignKeys" => true));
-      }
-      else {
-        $this->updateTable($refTableStruct, $curTableStruct, array("noRefresh" => true, "noForeignKeys" => true));
-      }
-    }  // eo table loop
+  abstract public function addDbStruct($refDbStruct, $opts = array());
 
 
-    // add foreign keys after all tables, columns and indices has been created
-    if (!$opts["noForeignKeys"]) {
-      foreach ($refStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
-
-        $refTableName = $refTableStruct["__TABLE_META__"]["TABLE_NAME"];
-
-        // foreign keys
-        if ($refTableStruct["__FOREIGN_KEYS__"]) {
-          foreach ($refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
-            if (!$curStruct["__TABLES__"][$refTableKey]["__FOREIGN_KEYS__"][$refFkKey]) {
-              $this->addTableForeignKey($refFkStruct);
-            }
-          }
-        }  // eo constraint loop
-      }  // eo table loop for foreign keys
-    }  // eo include foreign keys
-
-  }  // eo add db struc
-
-
-  /**
-  * Add a table to the database structure.
-  * @param $tableStruct Array with the table definition.
-  * @param $opts Optional option array. Key is option.
-  *        Valid options:<br>
-  *        - noIndices<br>
-  *        - noForeignKeys
-  */
-  public function addTable($tableStruct, $opts) {
-    $stmt = $this->tableDefCreateStmt($tableStruct, $opts);
-    $this->executeStmt($stmt);
-  }  // eo add table
-
-
-  /**
-  * Add a column to a table structure.
-  * @param $columnStruct Array with the table definition.
-  */
-  public function addTableColumn($columnStruct, $opts) {
-    $stmt = $this->columnDefAddStmt($columnStruct, $opts);
-    $this->executeStmt($stmt);
-  }  // eo add column to table
-
-
-  /**
-  * Create an add table statement.
-  * @param $tableStruct Array with the table definition.
-  * @param $opts Optional options array.
-  * @return The SQL statement for table definition.
-  * @see OgerDbStruct::tableDefCreateStmt() and
-  *      OgerDbStruct::addTable() for option description.
-  */
-  abstract public function tableDefCreateStmt($tableStruct, $opts);
-
-
-  /**
-  * Force order of table columns.
-  * @param columns Array with the column definitions.
-  *        The columns array is passed per reference so
-  *        the columns are ordered in place and you
-  *        dont need the return value.
-  * @return Ordered array with the column definitions.
-  */
-  abstract public function orderTableStructColumns(&$columns);
-
-
-  /**
-  * Create a column definition statement.
-  * @param $columnStruct  Array with column definition.
-  * @param $opts Optional options array. Key is option name.<br>
-  *        Valid options are:<br>
-  *        - afterColumnName: The column name after which this column should be placed.
-  *          Null means append after the last column.
-  *          Any other empty value means insert on first position.
-  * @return The SQL statement part for a column definition.
-  */
-  abstract public function columnDefStmt($columnStruct, $opts = array());
 
 
   /**
@@ -248,7 +143,7 @@ abstract class OgerDbStruct {
   /**
   * Update existing tables and columns and add missing one.
   * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the old database structure.
+  * @param $curStruct Optional array with the current database structure.
   *        If not present it is located from the associated database.
   * @param $opts Optional options array.
   */
@@ -256,7 +151,7 @@ abstract class OgerDbStruct {
 
     $this->checkDriverCompat($refStruct);
 
-    // get old structure before adding missing parts
+    // get current structure before adding missing parts
     // because we dont have to refresh that
     if ($curStruct === null) {
       $curStruct = $this->getDbStruct();
@@ -271,68 +166,11 @@ abstract class OgerDbStruct {
   }  // eo update struc
 
 
-  /**
-  * Update an existing table and add missing columns.
-  * @param $refTableStruct Array with the reference table structure.
-  * @param $curTableStruct Array with the old table structure.
-  * @param $opts Optional options array where the key is the option name.<br>
-  *        Valid options are:<br>
-  *        - noRefresh<br>
-  *        - noIndices<br>
-  *        - noForeignKeys<br>
-  */
-  public function updateTable($refTableStruct, $curTableStruct, $opts = array()) {
-
-    if ($curTableStruct === null) {
-      $curTableStruct = $this->getTableStruct($refTableStruct["__TABLE_META__"]["TABLE_NAME"]);
-    }
-
-    if (!$opts["noRefresh"]) {
-      $this->refreshTable($refTableStruct, $curTableStruct);
-    }
-
-    // add columns
-    $this->orderTableStructColumns($refTableStruct["__COLUMNS__"]);
-    $afterColumnName = "";
-    foreach ($refTableStruct["__COLUMNS__"] as $refColumnKey => $refColumnStruct) {
-      if (!$curTableStruct["__COLUMNS__"][$refColumnKey]) {
-        $this->addTableColumn($refColumnStruct, array("afterColumnName" => $afterColumnName));
-      }
-      // this column exists (old or new created) so the next missing column will be added after this
-      $afterColumnName = $refColumnStruct["COLUMN_NAME"];
-    }  // eo column loop
-
-    if (!$opts["noIndices"]) {
-      foreach ($refTableStruct["__INDICES__"] as $refIndexKey => $refIndexStruct) {
-        if (!$curTableStruct["__INDICES__"][$refIndexKey]) {
-          $this->addTableIndex($refIndexStruct);
-        }
-      }
-    }  // eo index
-
-    if (!$opts["noForeignKeys"]) {
-      foreach ($refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
-        if (!$curTableStruct["__FOREIGN_KEYS__"][$refFkKey]) {
-          $this->addTableForeignKey($refFkStruct);
-        }
-      }
-    }  // eo foreign keys
-
-  }  // eo update existing table
-
-
-  /**
-  * Create an alter table statement for table defaults.
-  * @param $refTableStruct Array with the reference table structure.
-  * @param $curTableStruct Array with the old table structure.
-  */
-  abstract public function tableDefUpdateStmt($refTableStruct, $curTableStruct);
-
 
   /**
   * Refresh an existing table column.
   * @param $refColumnStruct Array with the reference column structure.
-  * @param $curColumnStruct Array with the old column structure.
+  * @param $curColumnStruct Array with the current column structure.
   */
   public function refreshTableColumn($refColumnStruct, $curColumnStruct) {
     $stmt = $this->columnDefUpdateStmt($refColumnStruct, $curColumnStruct);
@@ -343,7 +181,7 @@ abstract class OgerDbStruct {
   /**
   * Create an alter table statement to alter a column.
   * @param $refColumnStruct Array with the reference column structure.
-  * @param $curColumnStruct Array with the old column structure.
+  * @param $curColumnStruct Array with the current column structure.
   */
   abstract public function columnDefUpdateStmt($refColumnStruct, $curColumnStruct);
 
@@ -351,20 +189,20 @@ abstract class OgerDbStruct {
   /**
   * Refresh only existing tables and columns.
   * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the old database structure.
+  * @param $curStruct Optional array with the current database structure.
   *        If not present it is located from the associated database.
   */
   public function refreshDbStruct($refStruct, $curStruct = null, $opts = array()) {
 
     $this->checkDriverCompat($refStruct);
 
-    // get old structure before adding missing parts
+    // get current structure before adding missing parts
     // because we dont have to update that
     if ($curStruct === null) {
       $curStruct = $this->getDbStruct();
     }
 
-    // refresh old table if exits
+    // refresh current table if exits
     foreach ($refStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
       $curTableStruct = $curStruct["__TABLES__"][$refTableKey];
       if ($curTableStruct) {
@@ -376,51 +214,13 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Refresh an existing table and refresh existing columns.
-  * @param $refTableStruct Array with the reference table structure.
-  * @param $curTableStruct Array with the old table structure.
-  */
-  public function refreshTable($refTableStruct, $curTableStruct, $opts) {
-
-    // refresh table defaults
-    $stmt = $this->tableDefUpdateStmt($refTableStruct, $curTableStruct);
-    $this->executeStmt($stmt);
-
-    // refresh existing columns
-    foreach ($refTableStruct["__COLUMNS__"] as $refColumnKey => $refColumnStruct) {
-      $curColumnStruct = $curTableStruct["__COLUMNS__"][$refColumnKey];
-      if ($curColumnStruct) {
-        $this->refreshTableColumn($refColumnStruct, $curColumnStruct);
-      }
-    }
-
-    // refresh existing indices
-    foreach ($refTableStruct["__INDICES__"] as $refIndexKey => $refIndexStruct) {
-      $curIndexStruct = $curTableStruct["__INDICES__"][$refIndexKey];
-      if ($curIndexStruct) {
-        $this->refreshTableIndex($refIndexStruct, $curIndexStruct);
-      }
-    }
-
-    // refresh existing foreign keys
-    foreach ($refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
-      $curFkStruct = $curTableStruct["__FOREIGN_KEYS__"][$refFkKey];
-      if ($curFkStruct) {
-        $this->refreshTableForeignKey($refFkStruct, $curFkStruct);
-      }
-    }
-
-  }  // eo refresh table
-
-
-  /**
   * Order columns of tables.
   * Order only columns of tables because the order of
   * columns in indices and foreign keys is treated significant
   * and therefore handled by refreshing.
   * Tables do not have a specific order inside the database.
   * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the old database structure.
+  * @param $curStruct Optional array with the current database structure.
   *        If not present it is located from the associated database.
   * @param $opts Optional options array.
   */
@@ -447,7 +247,7 @@ abstract class OgerDbStruct {
   * Despite the first impression not the given database struct is cleaned up
   * but everything that is above.
   * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the old database structure.
+  * @param $curStruct Optional array with the current database structure.
   *        If not present it is located from the associated database.
   * @param $opts Optional options array.
   */
@@ -510,7 +310,7 @@ abstract class OgerDbStruct {
   * Force database structure.
   * Forces the given database structure by adding, updating and deleting divergent structure.
   * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the old database structure.
+  * @param $curStruct Optional array with the current database structure.
   *        If not present it is located from the associated database.
   * @param $opts Optional options array.
   */
@@ -524,7 +324,7 @@ abstract class OgerDbStruct {
 
     $this->updateDbStruct($refStruct, $curStruct, $opts);
 
-    // do not hand over old struct because maybe heavily changed by updateDbStruct
+    // do not hand over current struct because maybe heavily changed by updateDbStruct
     $this->cleanupDbStruct($refStruct);
 
   }  // eo order db struct
@@ -565,7 +365,7 @@ abstract class OgerDbStruct {
   /**
   * Refresh an existing table index.
   * @param $refIndexStruct Array with the reference index structure.
-  * @param $curIndexStruct Array with the old index structure.
+  * @param $curIndexStruct Array with the current index structure.
   */
   public function refreshTableIndex($refIndexStruct, $curIndexStruct) {
     $stmt = $this->indexDefUpdateStmt($refIndexStruct, $curIndexStruct);
@@ -576,7 +376,7 @@ abstract class OgerDbStruct {
   /**
   * Refresh an existing foreign key.
   * @param $refFkStruct Array with the reference foreign key structure.
-  * @param $curFkStruct Array with the old foreign key structure.
+  * @param $curFkStruct Array with the current foreign key structure.
   */
   public function refreshTableForeignKey($refFkStruct, $curFkStruct) {
     $stmt = $this->foreignKeyDefUpdateStmt($refFkStruct, $curFkStruct);
