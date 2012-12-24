@@ -8,8 +8,15 @@
 
 /**
 * Handle database structure for mysql databases.
-* @see class OgerDbStruct.
-* We handle Collations (which in turn modifies charset).
+* @see class OgerDbStruct.<br>
+* This class works in a "pseudo-not-case-sensitive" way.
+* Names (tablenames, columnnames, indexnames, ...) are searched
+* case insensitive, so it is not possible to have the same name with different
+* case twice in the same area. It is no problem to have the same
+* name in different areas. Though the names are searched in a case independent way
+* they are stored case sensitive and can be used this way if necessary.<br>
+* The structure does not contain privileges.<br>
+* We handle Collations (which in turn modifies charset).<br>
 */
 class OgerDbStructMysql extends OgerDbStruct {
 
@@ -20,8 +27,8 @@ class OgerDbStructMysql extends OgerDbStruct {
   private $defCatalogName = "def";
   private $sqlServerOs;
 
-  private $newDbStruct;
-  private $oldDbStruct;
+  private $refDbStruct;
+  private $curDbStruct;
 
 
   /**
@@ -47,13 +54,11 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
   /**
-  * Get the database structure.
+  * Get the current database structure.
   * @see OgerDbStruct::getDbStruct().
   */
   /**
-  * Get the database structure.
-  * Keys for table and column names are in lowercase, so identifier cannot
-  * be used with different case. The structure does not contain privileges.
+  * Get the current database structure.
   * @param $opts Optional options array where the key is the option name.<br>
   *        Valid options are:<br>
   *        - whereTables: A where condition that is passed to the getTableNames() method
@@ -341,18 +346,18 @@ class OgerDbStructMysql extends OgerDbStruct {
   /**
    * Precheck before process changes.
   */
-  private function preProcessCheck($newDbStruct, $oldDbStruct) {
-    $driverName = $newDbStruct["__DBSTRUCT_META__"]["__DRIVER_NAME__"];
+  private function preProcessCheck($refDbStruct, $curDbStruct) {
+    $driverName = $refDbStruct["__DBSTRUCT_META__"]["__DRIVER_NAME__"];
     if ($driverName != "mysql") {
       throw new Exception ("Driver '$driverName' not compatible. Only driver 'mysql' supported.");
     }
 
-    if (!$newDbStruct && !$this->newDbStruct) {
-      throw new Exception ("New database structure required.");
+    if (!$refDbStruct && !$this->refDbStruct) {
+      throw new Exception ("Reference database structure required.");
     }
 
-    if (!$this->oldDbStruct) {
-      $this->oldDbStruct = $this->getDbStruct();
+    if (!$this->curDbStruct) {
+      $this->curDbStruct = $this->getDbStruct();
     }
 
   }  // eo prechecks
@@ -575,42 +580,42 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an alter table statement for table defaults.
   * @see OgerDbStruct::columnDefAddStmt().
   */
-  public function tableDefUpdateStmt($newTableStruct, $oldTableStruct) {
+  public function tableDefUpdateStmt($refTableStruct, $curTableStruct) {
 
-    $newTableMeta = $newTableStruct["__TABLE_META__"];
-    $oldTableMeta = $oldTableStruct["__TABLE_META__"];
+    $refTableMeta = $refTableStruct["__TABLE_META__"];
+    $curTableMeta = $curTableStruct["__TABLE_META__"];
 
     // table name - check for different case
     $changed = false;
-    if ($newTableMeta["TABLE_NAME"] != $oldTableMeta["TABLE_NAME"]) {
+    if ($refTableMeta["TABLE_NAME"] != $curTableMeta["TABLE_NAME"]) {
       $changed = true;
       // to nothing if only differ in case on windows
-      if (strtolower($newTableMeta["TABLE_NAME"]) == strtolower($oldTableMeta["TABLE_NAME"]) &&
+      if (strtolower($refTableMeta["TABLE_NAME"]) == strtolower($curTableMeta["TABLE_NAME"]) &&
           stripos("win", $this->sqlServerOs) !== false ) {
         $changed = false;
       }
     }
     if ($changed) {
-      $newTableName = $this->quoteName($newTableMeta["TABLE_NAME"]);
-      $oldTableName = $this->quoteName($oldTableMeta["TABLE_NAME"]);
-      $stmt = "RENAME TABLE {$newTableName} TO {$oldTableName}";
+      $refTableName = $this->quoteName($refTableMeta["TABLE_NAME"]);
+      $curTableName = $this->quoteName($curTableMeta["TABLE_NAME"]);
+      $stmt = "RENAME TABLE {$refTableName} TO {$curTableName}";
       $this->executeStmt($stmt);
     }
 
     // table defaults
     $changed = false;
-    if ($newTableMeta["TABLE_COLLATION"] != $oldTableMeta["TABLE_COLLATION"]) {
+    if ($refTableMeta["TABLE_COLLATION"] != $curTableMeta["TABLE_COLLATION"]) {
       $changed = true;
     }
-    if ($newTableMeta["ENGINE"] != $oldTableMeta["ENGINE"]) {
+    if ($refTableMeta["ENGINE"] != $curTableMeta["ENGINE"]) {
       $changed = true;
     }
 
     if ($changed) {
       $stmt .= "ALTER TABLE " .
-               $this->quoteName($oldTableMeta["TABLE_NAME"]) .
-               " ENGINE " . $newTableMeta["ENGINE"];
-               " COLLATE " . $newTableMeta["TABLE_COLLATION"];
+               $this->quoteName($curTableMeta["TABLE_NAME"]) .
+               " ENGINE " . $refTableMeta["ENGINE"];
+               " COLLATE " . $refTableMeta["TABLE_COLLATION"];
     }
 
     return $stmt;
@@ -621,35 +626,35 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an alter table statement to alter a column.
   * @see OgerDbStruct::columnDefUpdateStmt().
   */
-  public function columnDefUpdateStmt($newColumnStruct, $oldColumnStruct) {
+  public function columnDefUpdateStmt($refColumnStruct, $curColumnStruct) {
 
-    if ($newColumnStruct["COLUMN_NAME"] != $oldColumnStruct["COLUMN_NAME"]) {
+    if ($refColumnStruct["COLUMN_NAME"] != $curColumnStruct["COLUMN_NAME"]) {
       $changed = true;
     }
 
-    if ($newColumnStruct["COLUMN_TYPE"] != $oldColumnStruct["COLUMN_TYPE"]) {
+    if ($refColumnStruct["COLUMN_TYPE"] != $curColumnStruct["COLUMN_TYPE"]) {
       $changed = true;
     }
-    if ($newColumnStruct["COLLATION_NAME"] && $newColumnStruct["COLLATION_NAME"] != $oldColumnStruct["COLLATION_NAME"]) {
+    if ($refColumnStruct["COLLATION_NAME"] && $refColumnStruct["COLLATION_NAME"] != $curColumnStruct["COLLATION_NAME"]) {
       $changed = true;
     }
-    if ($newColumnStruct["IS_NULLABLE"] != $oldColumnStruct["IS_NULLABLE"]) {
+    if ($refColumnStruct["IS_NULLABLE"] != $curColumnStruct["IS_NULLABLE"]) {
       $changed = true;
     }
-    if ($newColumnStruct["COLUMN_DEFAULT"] != $oldColumnStruct["COLUMN_DEFAULT"]) {
+    if ($refColumnStruct["COLUMN_DEFAULT"] != $curColumnStruct["COLUMN_DEFAULT"]) {
       $changed = true;
     }
-    if ($newColumnStruct["EXTRA"] != $oldColumnStruct["EXTRA"]) {
+    if ($refColumnStruct["EXTRA"] != $curColumnStruct["EXTRA"]) {
       $changed = true;
     }
 
     // create change statement
     // TODO: include AFTER | FIRST position here?
     if ($changed) {
-      $stmt = "ALTER TABLE " . $this->quoteName($oldColumnStruct["TABLE_NAME"]) .
-              " CHANGE COLUMN " . $this->quoteName($oldColumnStruct["COLUMN_NAME"]) .
-              " " . $this->quoteName($newColumnStruct["COLUMN_NAME"]) .
-              " " . $this->columnDefStmt($newColumnStruct);
+      $stmt = "ALTER TABLE " . $this->quoteName($curColumnStruct["TABLE_NAME"]) .
+              " CHANGE COLUMN " . $this->quoteName($curColumnStruct["COLUMN_NAME"]) .
+              " " . $this->quoteName($refColumnStruct["COLUMN_NAME"]) .
+              " " . $this->columnDefStmt($refColumnStruct);
     }
 
     return $stmt;
@@ -660,19 +665,19 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an alter table statement to alter a index.
   * @see OgerDbStruct::indexDefUpdateStmt().
   */
-  public function indexDefUpdateStmt($newIndexStruct, $oldIndexStruct) {
+  public function indexDefUpdateStmt($refIndexStruct, $curIndexStruct) {
 
-    $newIndexSql = $this->indexDefStmt($newIndexStruct);
-    $oldIndexSql = $this->indexDefStmt($oldIndexStruct);
+    $refIndexSql = $this->indexDefStmt($refIndexStruct);
+    $curIndexSql = $this->indexDefStmt($curIndexStruct);
 
-    $tableName = $this->quoteName($oldIndexStruct["__INDEX_META__"]["TABLE_NAME"]);
-    $indexName = $this->quoteName($oldIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
+    $tableName = $this->quoteName($curIndexStruct["__INDEX_META__"]["TABLE_NAME"]);
+    $indexName = $this->quoteName($curIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
 
     // create change statement
-    if ($newIndexSql != $oldIndexSql) {
-      $this->log(static::LOG_NOTICE, "OLD: $oldIndexSql\nNEW: $newIndexSql\n";
+    if ($refIndexSql != $curIndexSql) {
+      $this->log(static::LOG_NOTICE, "OLD: $curIndexSql\nNEW: $refIndexSql\n";
       $stmt = "ALTER TABLE $tableName DROP INDEX $indexName;" .
-              "ALTER TABLE $tableName ADD $newIndexSql";
+              "ALTER TABLE $tableName ADD $refIndexSql";
     }
 
     return $stmt;
@@ -683,19 +688,19 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Create an alter table statement to alter a foreign key.
   * @see OgerDbStruct::foreignKeyDefUpdateStmt().
   */
-  public function foreignKeyDefUpdateStmt($newFkStruct, $oldFkStruct) {
+  public function foreignKeyDefUpdateStmt($refFkStruct, $curFkStruct) {
 
-    $newFkSql = $this->foreignKeyDefStmt($newFkStruct);
-    $oldFkSql = $this->foreignKeyDefStmt($oldFkStruct);
+    $refFkSql = $this->foreignKeyDefStmt($refFkStruct);
+    $curFkSql = $this->foreignKeyDefStmt($curFkStruct);
 
-    $tableName = $this->quoteName($oldFkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
-    $fkName = $this->quoteName($oldFkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+    $tableName = $this->quoteName($curFkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
+    $fkName = $this->quoteName($curFkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
 
     // create change statement
-    if ($newFkSql != $oldFkSql) {
-      $this->log(static::LOG_NOTICE, "OLD: $oldFkSql\nNEW: $newFkSql\n";
+    if ($refFkSql != $curFkSql) {
+      $this->log(static::LOG_NOTICE, "OLD: $curFkSql\nNEW: $refFkSql\n";
       $stmt = "ALTER TABLE $tableName DROP FOREIGN KEY $fkName;" .
-              "ALTER TABLE $tableName ADD $newFkSql";
+              "ALTER TABLE $tableName ADD $refFkSql";
     }
 
     return $stmt;
@@ -762,43 +767,43 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Reorder table columns.
   * @see OgerDbStruct::reorderTableColumns().
   */
-  public function reorderTableColumns($newTableStruct, $oldTableStruct){
+  public function reorderTableColumns($refTableStruct, $curTableStruct){
 
-    $this->orderTableStructColumns($newTableStruct["__COLUMNS__"]);
-    $newColNames = array();
-    foreach ($newTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
-      $newColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
+    $this->orderTableStructColumns($refTableStruct["__COLUMNS__"]);
+    $refColNames = array();
+    foreach ($refTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
+      $refColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
     }
 
-    $this->orderTableStructColumns($oldTableStruct["__COLUMNS__"]);
-    $oldColNames = array();
-    foreach ($oldTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
-      $oldColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
+    $this->orderTableStructColumns($curTableStruct["__COLUMNS__"]);
+    $curColNames = array();
+    foreach ($curTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
+      $curColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
     }
 
 
     // remove all column names that are not in both tables
     // because they do not affect the reordering
 
-    foreach ($newColNames as $colKey => $colStruct) {
-      if (!$oldColNames[$colKey]) {
-        unset($newColNames[$colKey]);
+    foreach ($refColNames as $colKey => $colStruct) {
+      if (!$curColNames[$colKey]) {
+        unset($refColNames[$colKey]);
       }
     }
 
-    foreach ($oldColNames as $colKey => $colStruct) {
-      if (!$newColNames[$colKey]) {
-        unset($oldColNames[$colKey]);
+    foreach ($curColNames as $colKey => $colStruct) {
+      if (!$refColNames[$colKey]) {
+        unset($curColNames[$colKey]);
       }
     }
 
-    $tableName = $this->quoteName($newTableStruct["__TABLE_META__"]["TABLE_NAME"]);
+    $tableName = $this->quoteName($refTableStruct["__TABLE_META__"]["TABLE_NAME"]);
 
     // use old column structure because we dont want to change the column but only the order
     $afterColumn = "";
-    foreach ($newColNames as $columnName) {
+    foreach ($refColNames as $columnName) {
 
-      $columnDef = $this->columnDefStmt($oldTableStruct["__COLUMNS__"][$columnName], array("afterColumnName" => $afterColumn));
+      $columnDef = $this->columnDefStmt($curTableStruct["__COLUMNS__"][$columnName], array("afterColumnName" => $afterColumn));
       $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colName $columnDef";
       $afterColumn = $colName;
 
