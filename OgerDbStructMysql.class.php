@@ -1,4 +1,5 @@
 <?php
+<?php
 /*
 #LICENSE BEGIN
 #LICENSE END
@@ -399,11 +400,13 @@ class OgerDbStructMysql extends OgerDbStruct {
   } // eo table name lettercase handling
 
 
+  // ##############################################
+  // ADD STRUCTURE
+  // ##############################################
+
   /**
-  * Add missing tables and columns to the database.
-  * @param $refStruct Array with the reference database structure.
-  * @param $opts Optional options array.<br>
-  * @see See OgerDbStruct::addDbStruct().
+  * Add missing tables, columns, indices or foreign keys to the database.
+  * @see OgerDbStruct::addDbStruct().
   */
   public function addDbStruct($refDbStruct = null, $opts = array()) {
 
@@ -417,7 +420,7 @@ class OgerDbStructMysql extends OgerDbStruct {
         $this->addTable($refTableStruct, array("noForeignKeys" => true));
       }
       else {
-        $this->updateTable($refTableStruct, array("noRefresh" => true, "noForeignKeys" => true));
+        $this->addTableElements($refTableStruct, array("noForeignKeys" => true));
       }
     }  // eo table loop
 
@@ -425,17 +428,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     // add foreign keys after all tables, columns and indices has been created
     if (!$opts["noForeignKeys"]) {
       foreach ($refStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
-
-        $refTableName = $refTableStruct["__TABLE_META__"]["TABLE_NAME"];
-
-        // foreign keys
-        if ($refTableStruct["__FOREIGN_KEYS__"]) {
-          foreach ($refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
-            if (!$curStruct["__TABLES__"][$refTableKey]["__FOREIGN_KEYS__"][$refFkKey]) {
-              $this->addTableForeignKey($refFkStruct);
-            }
-          }
-        }  // eo constraint loop
+        $this->addTableElements($refTableStruct, array("noColumns" => true, "noIndices" => true));
       }  // eo table loop for foreign keys
     }  // eo include foreign keys
 
@@ -506,33 +499,36 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
   /**
-  * Update an existing table and add missing parts if requested.
+  * Add missing table elements.
   * @param $refTableStruct Array with the reference table structure.
   * @param $opts Optional options array where the key is the option name.<br>
   *        Valid options are:<br>
-  *        - noRefresh<br>
+  *        - noColumns<br>
   *        - noIndices<br>
   *        - noForeignKeys<br>
   */
-  public function updateTable($refTableStruct = null, $opts = array()) {
+  public function addTableElements($refTableStruct = null, $opts = array()) {
 
     $this->preProcessCheck();
 
-    if (!$opts["noRefresh"]) {
-      $this->refreshTable($refTableStruct, $opts);
-    }
+    // rename lettercase - reload current table structure
+    $this->handleTableCase($refTableStruct);
+    $curTableStruct = $this->curDbStruct["__TABLES__"][strtolower($refTableStruct["__TABLE_META__"]["TABLE_NAME"])];
 
     // add columns
-    $this->orderTableStructColumns($refTableStruct["__COLUMNS__"]);
-    $afterColumnName = "";
-    foreach ($refTableStruct["__COLUMNS__"] as $refColumnKey => $refColumnStruct) {
-      if (!$curTableStruct["__COLUMNS__"][$refColumnKey]) {
-        $this->addTableColumn($refColumnStruct, array("afterColumnName" => $afterColumnName));
-      }
-      // this column exists (old or new created) so the next missing column will be added after this
-      $afterColumnName = $refColumnStruct["COLUMN_NAME"];
-    }  // eo column loop
+    if (!$opts["noColumns"]) {
+      $this->orderTableStructColumns($refTableStruct["__COLUMNS__"]);
+      $afterColumnName = "";
+      foreach ($refTableStruct["__COLUMNS__"] as $refColumnKey => $refColumnStruct) {
+        if (!$curTableStruct["__COLUMNS__"][$refColumnKey]) {
+          $this->addTableColumn($refColumnStruct, array("afterColumnName" => $afterColumnName));
+        }
+        // this column exists (old or new created) so the next missing column will be added after this
+        $afterColumnName = $refColumnStruct["COLUMN_NAME"];
+      }  // eo column loop
+    }  // eo columns
 
+    // indices
     if (!$opts["noIndices"]) {
       foreach ($refTableStruct["__INDICES__"] as $refIndexKey => $refIndexStruct) {
         if (!$curTableStruct["__INDICES__"][$refIndexKey]) {
@@ -541,6 +537,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
     }  // eo index
 
+    // foreign keys
     if (!$opts["noForeignKeys"]) {
       foreach ($refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
         if (!$curTableStruct["__FOREIGN_KEYS__"][$refFkKey]) {
@@ -549,15 +546,80 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
     }  // eo foreign keys
 
-  }  // eo update existing table
+  }  // eo add missing elements to a table
+
+
+  /**
+  * Add a column to a table structure.
+  * @param $columnStruct Array with the table structure.
+  * @param $opts Optional options array. Key is option name.<br>
+  *        Valid options are:<br>
+  *        - afterColumnName: Passed to columnDefStmd(). Description see there.
+  */
+  public function addTableColumn($columnStruct, $opts = array()) {
+
+    $stmt = "ALTER TABLE " .
+            $this->quoteName($columnStruct["TABLE_NAME"]) .
+            " ADD COLUMN " .
+            $this->columnDefStmt($columnStruct, $opts);
+
+    $this->executeStmt($stmt);
+  }  // eo add column to table
+
+
+  /**
+  * Add an index to a table.
+  * @param $indexStruct Array with the index definition.
+  */
+  public function addTableIndex($indexStruct) {
+    $tableName = $this->quoteName($indexStruct["__INDEX_META__"]["TABLE_NAME"]);
+    $stmt = "ALTER TABLE $tableName ADD " . $this->indexDefStmt($indexStruct, $opts);
+    $this->executeStmt($stmt);
+  }  // eo add index
+
+
+  /**
+  * Add a foreign key to a table.
+  * @param $fkStruct Array with the foreign key definition.
+  */
+  public function addTableForeignKey($fkStruct) {
+    $tableName = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
+    $stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct, $opts);
+    $this->executeStmt($stmt);
+  }  // eo add foreign key
+
+
+  // ##############################################
+  // REFRESH STRUCTURE
+  // ##############################################
+
+  /**
+  * Refresh existing tables, columns, indices and foreign keys.
+  * Do not add missing ones.
+  * @param $refStruct Array with the reference database structure.
+  */
+  public function refreshDbStruct($refStruct = null) {
+
+    $this->preProcessCheck();
+    $this->handleTableCase($refTableStruct);
+
+    // refresh current table if exits
+    foreach ($this->refStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
+      $curTableStruct = $this->curStruct["__TABLES__"][$refTableKey];
+      if ($curTableStruct) {
+        $this->refreshTable($refTableStruct);
+      }
+    }  // eo table loop
+
+  }  // eo refresh struc
+
 
 
   /**
   * Refresh an existing table.
   * @param $refTableStruct Array with the reference table structure.
-  * @param $opts Optional options array where the key is the option name.<br>
   */
-  public function refreshTable($refTableStruct = null, $opts = array()) {
+  public function refreshTable($refTableStruct = null) {
 
     $this->preProcessCheck();
 
@@ -586,82 +648,119 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo table meta
 
 
-
-
     // refresh existing columns
     foreach ($refTableStruct["__COLUMNS__"] as $refColumnKey => $refColumnStruct) {
-      $curColumnStruct = $curTableStruct["__COLUMNS__"][$refColumnKey];
-      if ($curColumnStruct) {
-        $this->refreshTableColumn($refColumnStruct, $curColumnStruct);
+      if ($curTableStruct["__COLUMNS__"][$refColumnKey]) {
+        $this->refreshTableColumn($refColumnStruct);
       }
     }
 
     // refresh existing indices
     foreach ($refTableStruct["__INDICES__"] as $refIndexKey => $refIndexStruct) {
-      $curIndexStruct = $curTableStruct["__INDICES__"][$refIndexKey];
-      if ($curIndexStruct) {
-        $this->refreshTableIndex($refIndexStruct, $curIndexStruct);
+      if ($curTableStruct["__INDICES__"][$refIndexKey]) {
+        $this->refreshTableIndex($refIndexStruct);
       }
     }
 
     // refresh existing foreign keys
     foreach ($refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
-      $curFkStruct = $curTableStruct["__FOREIGN_KEYS__"][$refFkKey];
-      if ($curFkStruct) {
-        $this->refreshTableForeignKey($refFkStruct, $curFkStruct);
+      if ($curTableStruct["__FOREIGN_KEYS__"][$refFkKey]) {
+        $this->refreshTableForeignKey($refFkStruct);
       }
     }
 
   }  // eo refresh table
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-...
-
-
   /**
-  * Add a column to a table structure.
-  * @param $columnStruct Array with the table definition.
+  * Refresh an existing table column.
+  * @param $refColumnStruct Array with the reference column structure.
   */
-  public function addTableColumn($columnStruct, $opts) {
-    $stmt = $this->columnDefAddStmt($columnStruct, $opts);
-    $this->executeStmt($stmt);
-  }  // eo add column to table
+  public function refreshTableColumn($refColumnStruct) {
+
+    $curColumnStruc = $this->curDbStruct["__TABLES__"]
+                      [strtolower($refColumnStruct["TABLE_NAME"])]
+                      [strtolower($refColumnStruct["COLUMN_NAME"])];
+
+    if ($refColumnStruct["COLUMN_NAME"] != $curColumnStruct["COLUMN_NAME"] ||
+        $refColumnStruct["COLUMN_TYPE"] != $curColumnStruct["COLUMN_TYPE"] ||
+        $refColumnStruct["COLLATION_NAME"] != $curColumnStruct["COLLATION_NAME"] ||
+        $refColumnStruct["IS_NULLABLE"] != $curColumnStruct["IS_NULLABLE"] ||
+        $refColumnStruct["COLUMN_DEFAULT"] != $curColumnStruct["COLUMN_DEFAULT"] ||
+        $refColumnStruct["EXTRA"] != $curColumnStruct["EXTRA"]) {
+
+      // TODO: include AFTER | FIRST position here?
+      $stmt = "ALTER TABLE " . $this->quoteName($curColumnStruct["TABLE_NAME"]) .
+              " CHANGE COLUMN " . $this->quoteName($curColumnStruct["COLUMN_NAME"]) .
+              " " . $this->quoteName($refColumnStruct["COLUMN_NAME"]) .
+              " " . $this->columnDefStmt($refColumnStruct);
+
+      $this->executeStmt($stmt);
+    }  // eo something changed
+  }  // eo update column
+
+
   /**
-  * Add a column to a table structure.
-  * @param $columnStruct Array with the table structure.
+  * Refresh an existing table index.
+  * @param $refIndexStruct Array with the reference index structure.
   */
-  public function addTableColumn($columnStruct, $opts) {
-    $stmt = $this->columnDefAddStmt($columnStruct, $opts);
-    $this->executeStmt($stmt);
-  }  // eo add column to table
+  public function refreshTableIndex($refIndexStruct) {
 
+    $curIndexStruc = $this->curDbStruct["__TABLES__"]
+                      [strtolower($refIndexStruct["__INDEX_META__"]["TABLE_NAME"])]
+                      [strtolower($refIndexStruct["__INDEX_META__"]["INDEX_NAME"])];
 
+    $refIndexSql = $this->indexDefStmt($refIndexStruct);
+    $curIndexSql = $this->indexDefStmt($curIndexStruct);
 
+    if ($refIndexSql != $curIndexSql) {
 
+      $tableName = $this->quoteName($refIndexStruct["__INDEX_META__"]["TABLE_NAME"]);
+      $curIndexName = $this->quoteName($curIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
+
+      $this->log(static::LOG_NOTICE, "-- OLD: $curIndexSql\n-- NEW: $refIndexSql\n";
+      $stmt = "ALTER TABLE $tableName DROP INDEX $curIndexName;" .
+              "ALTER TABLE $tableName ADD $refIndexSql";
+
+      $this->executeStmt($stmt);
+    }  // eo something changed
+  }  // eo update index
 
 
   /**
-  * Create a column definition statement.
+  * Refresh an existing foreign key.
+  * @param $refFkStruct Array with the reference foreign key structure.
+  */
+  public function refreshTableForeignKey($refFkStruct) {
+
+    $curFkStruc = $this->curDbStruct["__TABLES__"]
+                      [strtolower($refIndexStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"])]
+                      [strtolower($refIndexStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"])];
+
+    $refFkSql = $this->foreignKeyDefStmt($refFkStruct);
+    $curFkSql = $this->foreignKeyDefStmt($curFkStruct);
+
+    if ($refFkSql != $curFkSql) {
+
+      $tableName = $this->quoteName($refFkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
+      $curFkName = $this->quoteName($curFkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+
+      $this->log(static::LOG_NOTICE, "-- OLD: $curFkSql\n-- NEW: $refFkSql\n";
+      $stmt = "ALTER TABLE $tableName DROP FOREIGN KEY $curFkName;" .
+              "ALTER TABLE $tableName ADD $refFkSql";
+
+      $this->executeStmt($stmt);
+    }  // eo something changed
+  }  // eo update foreign key
+
+
+
+  // ##############################################
+  // SQL DEFINITION STATEMENTS
+  // ##############################################
+
+ /**
+  * Create sql statement for a column definition.
   * @param $columnStruct  Array with column definition.
   * @param $opts Optional options array. Key is option name.<br>
   *        Valid options are:<br>
@@ -669,60 +768,6 @@ class OgerDbStructMysql extends OgerDbStruct {
   *          Null means append after the last column.
   *          Any other empty value means insert on first position.
   * @return The SQL statement part for a column definition.
-  */
-  abstract public function columnDefStmt($columnStruct, $opts = array());
-
-
-
-
-
-
-
-
-
-
-
-
-
----
-
-
-
-
-
-
-  /**
-  * Force order of table columns.
-  * @param columns Array with the column definitions.
-  *        The columns array is passed per reference so
-  *        the columns are ordered in place and you
-  *        dont need the return value.
-  * @return Ordered array with the column definitions.
-  */
-  private function orderTableStructColumns(&$columns){
-
-    $tmpCols = array();
-
-    // preserve references
-    foreach ($columns as $columnKey => &$columnStruct) {
-      $tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
-    }
-    ksort($tmpCols);
-
-    // assign back to original array
-    $columns = array();
-    foreach ($tmpCols as &$columnStruct) {
-      $columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
-    }
-
-    // return per value
-    return $columns;
-  }  // eo order table columns
-
-
-  /**
-  * Create a column definition statement.
-  * @see OgerDbStruct::columnDefStmt().
   */
   public function columnDefStmt($columnStruct, $opts = array()) {
 
@@ -768,8 +813,9 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
   /**
-  * Create a table index statement.
-  * @see OgerDbStruct::indexDefStmt().
+  * Create a sql statement for a table index.
+  * @param $indexStruct  Array with index structure.
+  * @return The SQL statement for the index definition.
   */
   public function indexDefStmt($indexStruct) {
 
@@ -802,135 +848,9 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
   /**
-  * Force order of index columns.
-  * @see OgerDbStruct::orderIndexColumns().
-  */
-  public function orderIndexColumns(&$columns){
-
-    $tmpCols = array();
-
-    // preserve references
-    foreach ($columns as $columnKey => &$columnStruct) {
-      $tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
-    }
-    ksort($tmpCols);
-
-    // assign back to original array
-    $columns = array();
-    foreach ($tmpCols as &$columnStruct) {
-      $columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
-    }
-
-    // return per value
-    return $columns;
-  }  // eo order index columns
-
-
-  /**
-  * Create an add column statement.
-  * @see OgerDbStruct::columnDefAddStmt().
-  */
-  public function columnDefAddStmt($columnStruct, $opts) {
-
-    $stmt = "ALTER TABLE " .
-            $this->quoteName($columnStruct["TABLE_NAME"]) .
-            " ADD COLUMN " .
-            $this->columnDefStmt($columnStruct, $opts);
-
-    return $stmt;
-  }  // eo add column
-
-
-
-
-  /**
-  * Create an alter table statement to alter a column.
-  * @see OgerDbStruct::columnDefUpdateStmt().
-  */
-  public function columnDefUpdateStmt($refColumnStruct, $curColumnStruct) {
-
-    if ($refColumnStruct["COLUMN_NAME"] != $curColumnStruct["COLUMN_NAME"]) {
-      $changed = true;
-    }
-
-    if ($refColumnStruct["COLUMN_TYPE"] != $curColumnStruct["COLUMN_TYPE"]) {
-      $changed = true;
-    }
-    if ($refColumnStruct["COLLATION_NAME"] && $refColumnStruct["COLLATION_NAME"] != $curColumnStruct["COLLATION_NAME"]) {
-      $changed = true;
-    }
-    if ($refColumnStruct["IS_NULLABLE"] != $curColumnStruct["IS_NULLABLE"]) {
-      $changed = true;
-    }
-    if ($refColumnStruct["COLUMN_DEFAULT"] != $curColumnStruct["COLUMN_DEFAULT"]) {
-      $changed = true;
-    }
-    if ($refColumnStruct["EXTRA"] != $curColumnStruct["EXTRA"]) {
-      $changed = true;
-    }
-
-    // create change statement
-    // TODO: include AFTER | FIRST position here?
-    if ($changed) {
-      $stmt = "ALTER TABLE " . $this->quoteName($curColumnStruct["TABLE_NAME"]) .
-              " CHANGE COLUMN " . $this->quoteName($curColumnStruct["COLUMN_NAME"]) .
-              " " . $this->quoteName($refColumnStruct["COLUMN_NAME"]) .
-              " " . $this->columnDefStmt($refColumnStruct);
-    }
-
-    return $stmt;
-  }  // eo update column
-
-
-  /**
-  * Create an alter table statement to alter a index.
-  * @see OgerDbStruct::indexDefUpdateStmt().
-  */
-  public function indexDefUpdateStmt($refIndexStruct, $curIndexStruct) {
-
-    $refIndexSql = $this->indexDefStmt($refIndexStruct);
-    $curIndexSql = $this->indexDefStmt($curIndexStruct);
-
-    $tableName = $this->quoteName($curIndexStruct["__INDEX_META__"]["TABLE_NAME"]);
-    $indexName = $this->quoteName($curIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
-
-    // create change statement
-    if ($refIndexSql != $curIndexSql) {
-      $this->log(static::LOG_NOTICE, "-- OLD: $curIndexSql\n-- NEW: $refIndexSql\n";
-      $stmt = "ALTER TABLE $tableName DROP INDEX $indexName;" .
-              "ALTER TABLE $tableName ADD $refIndexSql";
-    }
-
-    return $stmt;
-  }  // eo update index
-
-
-  /**
-  * Create an alter table statement to alter a foreign key.
-  * @see OgerDbStruct::foreignKeyDefUpdateStmt().
-  */
-  public function foreignKeyDefUpdateStmt($refFkStruct, $curFkStruct) {
-
-    $refFkSql = $this->foreignKeyDefStmt($refFkStruct);
-    $curFkSql = $this->foreignKeyDefStmt($curFkStruct);
-
-    $tableName = $this->quoteName($curFkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
-    $fkName = $this->quoteName($curFkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
-
-    // create change statement
-    if ($refFkSql != $curFkSql) {
-      $this->log(static::LOG_NOTICE, "-- OLD: $curFkSql\n-- NEW: $refFkSql\n";
-      $stmt = "ALTER TABLE $tableName DROP FOREIGN KEY $fkName;" .
-              "ALTER TABLE $tableName ADD $refFkSql";
-    }
-
-    return $stmt;
-  }  // eo update foreign key
-
-
-  /**
-  * Create a table foreign key statement.
-  * @see OgerDbStruct::foreignKeyDefStmt().
+  * Create a sql statement for a foreign key.
+  * @param $fkStruct  Array with foreign key structure.
+  * @return The SQL statement for the foreign key sql statement.
   */
   public function foreignKeyDefStmt($fkStruct) {
 
@@ -959,9 +879,114 @@ class OgerDbStructMysql extends OgerDbStruct {
   }  // eo foreign key def
 
 
+
+  // ##############################################
+  // HELPER METHODS (SORTING, ...)
+  // ##############################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /**
+  * Force order of table columns.
+  * @param columns Array with the columns structure.
+  *        The columns array is passed per reference so
+  *        the columns are ordered in place and you
+  *        dont need the return value.
+  * @return Ordered columns array.
+  */
+  private function orderTableStructColumns(&$columns){
+
+    $tmpCols = array();
+
+    // preserve references
+    foreach ($columns as $columnKey => &$columnStruct) {
+      $tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
+    }
+    ksort($tmpCols);
+
+    // assign back to original array
+    $columns = array();
+    foreach ($tmpCols as &$columnStruct) {
+      $columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
+    }
+
+    // return per value
+    return $columns;
+  }  // eo order table columns
+
+
+  /**
+  * Force order of index columns.
+  * @param columns Array with the index columns structure.
+  *        The columns array is passed per reference so
+  *        the columns are ordered in place and you
+  *        dont need the return value.
+  * @return Ordered columns array.
+  */
+  public function orderIndexColumns(&$columns){
+
+    $tmpCols = array();
+
+    // preserve references
+    foreach ($columns as $columnKey => &$columnStruct) {
+      $tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
+    }
+    ksort($tmpCols);
+
+    // assign back to original array
+    $columns = array();
+    foreach ($tmpCols as &$columnStruct) {
+      $columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
+    }
+
+    // return per value
+    return $columns;
+  }  // eo order index columns
+
+
   /**
   * Force order of foreign key columns.
-  * @see OgerDbStruct::orderForeignKeyColumns().
+  * @param columns Array with the foreign key columns structure.
+  *        The columns array is passed per reference so
+  *        the columns are ordered in place and you
+  *        dont need the return value.
+  * @return Ordered columns array.
   */
   public function orderForeignKeyColumns(&$columns){
 
@@ -984,55 +1009,19 @@ class OgerDbStructMysql extends OgerDbStruct {
   }  // eo order foreign key columns
 
 
-  /**
-  * Reorder table columns.
-  * @see OgerDbStruct::reorderTableColumns().
-  */
-  public function reorderTableColumns($refTableStruct, $curTableStruct){
-
-    $this->orderTableStructColumns($refTableStruct["__COLUMNS__"]);
-    $refColNames = array();
-    foreach ($refTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
-      $refColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
-    }
-
-    $this->orderTableStructColumns($curTableStruct["__COLUMNS__"]);
-    $curColNames = array();
-    foreach ($curTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
-      $curColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
-    }
 
 
-    // remove all column names that are not in both tables
-    // because they do not affect the reordering
 
-    foreach ($refColNames as $colKey => $colStruct) {
-      if (!$curColNames[$colKey]) {
-        unset($refColNames[$colKey]);
-      }
-    }
 
-    foreach ($curColNames as $colKey => $colStruct) {
-      if (!$refColNames[$colKey]) {
-        unset($curColNames[$colKey]);
-      }
-    }
 
-    $tableName = $this->quoteName($refTableStruct["__TABLE_META__"]["TABLE_NAME"]);
 
-    // use current column structure because we dont want to change the column but only the order
-    $afterColumn = "";
-    foreach ($refColNames as $columnName) {
 
-      $columnDef = $this->columnDefStmt($curTableStruct["__COLUMNS__"][$columnName], array("afterColumnName" => $afterColumn));
-      $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colName $columnDef";
-      $afterColumn = $colName;
 
-      $this->executeStmt($stmt);
 
-    }  // eo common column loop
 
-  }  // eo order table columns
+
+
+
 
 
 

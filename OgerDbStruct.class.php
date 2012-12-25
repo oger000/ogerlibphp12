@@ -47,7 +47,7 @@ abstract class OgerDbStruct {
   /**
    * Get driver dependend instance.
    * For params see @see __construct().
-   * @throw Throws an exception if the driver for given PDO object is not supported.S
+   * @throw Throws an exception if the driver for given PDO object is not supported.
    */
   static function getInstance($conn, $dbName) {
 
@@ -101,23 +101,45 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Add missing tables and columns to the database.
+  * Add missing tables, columns, indices or foreign keys to the database.
   * @param $refStruct Array with the reference database structure.
   * @param $opts Optional options array. Keys are options.<br>
   *        Valid optios are:<br>
   *        - noForeignKeys<br>
   */
-  abstract public function addDbStruct($refDbStruct, $opts = array());
+  abstract public function addDbStruct($refDbStruct = null, $opts = array());
 
 
   /**
-  * Update existing tables and columns and add missing one.
+  * Refresh existing tables, columns, indices and foreign keys.
+  * Do not add missing ones.
   * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the current database structure.
-  *        If not present it is located from the associated database.
+  */
+  abstract public function refreshDbStruct($refStruct = null;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /**
+  * Update existing tables, columns, indices or foreign keys and add missing one.
+  * @param $refStruct Array with the reference database structure.
   * @param $opts Optional options array.
   */
-  public function updateDbStruct($refStruct, $curStruct = null, $opts = array()) {
+  public function updateDbStruct($refStruct, $opts = array()) {
 
     $this->checkDriverCompat($refStruct);
 
@@ -148,80 +170,16 @@ abstract class OgerDbStruct {
 
 
 
-  /**
-  * Create a table index definition statement.
-  * @param $indexStruct  Array with index definition.
-  * @return The SQL statement for the index definition.
-  */
-  abstract public function indexDefStmt($indexStruct);
-
-
-  /**
-  * Force order of index columns.
-  * @param columns Array with the column definitions.
-  *        The columns array is passed per reference so
-  *        the columns are ordered in place and you
-  *        dont need the return value.
-  * @return Ordered array with the column definitions.
-  */
-  abstract public function orderIndexColumns(&$columns);
-
-
-  /**
-  * Create an add column statement.
-  * @param $columnStruct Array with the column definition.
-  * @param $opts Optional options array.
-  * @return The SQL statement for adding a column.
-  */
-  abstract public function columnDefAddStmt($columnStruct, $opts);
 
 
 
 
-  /**
-  * Refresh an existing table column.
-  * @param $refColumnStruct Array with the reference column structure.
-  * @param $curColumnStruct Array with the current column structure.
-  */
-  public function refreshTableColumn($refColumnStruct, $curColumnStruct) {
-    $stmt = $this->columnDefUpdateStmt($refColumnStruct, $curColumnStruct);
-    $this->executeStmt($stmt);
-  }  // eo update column
 
 
-  /**
-  * Create an alter table statement to alter a column.
-  * @param $refColumnStruct Array with the reference column structure.
-  * @param $curColumnStruct Array with the current column structure.
-  */
-  abstract public function columnDefUpdateStmt($refColumnStruct, $curColumnStruct);
 
 
-  /**
-  * Refresh only existing tables and columns.
-  * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the current database structure.
-  *        If not present it is located from the associated database.
-  */
-  public function refreshDbStruct($refStruct, $curStruct = null, $opts = array()) {
 
-    $this->checkDriverCompat($refStruct);
 
-    // get current structure before adding missing parts
-    // because we dont have to update that
-    if ($curStruct === null) {
-      $curStruct = $this->getDbStruct();
-    }
-
-    // refresh current table if exits
-    foreach ($refStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
-      $curTableStruct = $curStruct["__TABLES__"][$refTableKey];
-      if ($curTableStruct) {
-        $this->refreshTable($refTableStruct, $curTableStruct);
-      }
-    }  // eo table loop
-
-  }  // eo refresh struc
 
 
   /**
@@ -251,6 +209,89 @@ abstract class OgerDbStruct {
     }  // eo table loop
 
   }  // eo order db struct
+
+
+  /**
+  * Reorder table columns.
+  * @see OgerDbStruct::reorderTableColumns().
+  */
+  public function reorderTableColumns($refTableStruct, $curTableStruct){
+
+    $this->orderTableStructColumns($refTableStruct["__COLUMNS__"]);
+    $refColNames = array();
+    foreach ($refTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
+      $refColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
+    }
+
+    $this->orderTableStructColumns($curTableStruct["__COLUMNS__"]);
+    $curColNames = array();
+    foreach ($curTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
+      $curColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
+    }
+
+
+    // remove all column names that are not in both tables
+    // because they do not affect the reordering
+
+    foreach ($refColNames as $colKey => $colStruct) {
+      if (!$curColNames[$colKey]) {
+        unset($refColNames[$colKey]);
+      }
+    }
+
+    foreach ($curColNames as $colKey => $colStruct) {
+      if (!$refColNames[$colKey]) {
+        unset($curColNames[$colKey]);
+      }
+    }
+
+    $tableName = $this->quoteName($refTableStruct["__TABLE_META__"]["TABLE_NAME"]);
+
+    // use current column structure because we dont want to change the column but only the order
+    $afterColumn = "";
+    foreach ($refColNames as $columnName) {
+
+      $columnDef = $this->columnDefStmt($curTableStruct["__COLUMNS__"][$columnName], array("afterColumnName" => $afterColumn));
+      $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colName $columnDef";
+      $afterColumn = $colName;
+
+      $this->executeStmt($stmt);
+
+    }  // eo common column loop
+
+  }  // eo order table columns
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
   /**
@@ -341,58 +382,8 @@ abstract class OgerDbStruct {
   }  // eo order db struct
 
 
-  /**
-  * Create a table foreign key definition statement.
-  * @param $fkStruct  Array with foreign key definition.
-  * @return The SQL statement for the foreign key sql statement.
-  */
-  abstract public function foreignKeyDefStmt($fkStruct);
 
 
-  /**
-  * Add a index to a table.
-  * @param $indexStruct Array with the index definition.
-  * @param $opts Optional option array. Key is option.
-  */
-  public function addTableIndex($indexStruct, $opts = array()) {
-    $tableName = $this->quoteName($indexStruct["__INDEX_META__"]["TABLE_NAME"]);
-    $stmt = "ALTER TABLE $tableName ADD " . $this->indexDefStmt($indexStruct, $opts);
-    $this->executeStmt($stmt);
-  }  // eo add index
-
-
-  /**
-  * Add a foreign key to a table.
-  * @param $fkStruct Array with the foreign key definition.
-  * @param $opts Optional option array. Key is option.
-  */
-  public function addTableForeignKey($fkStruct, $opts = array()) {
-    $tableName = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
-    $stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct, $opts);
-    $this->executeStmt($stmt);
-  }  // eo add foreign key
-
-
-  /**
-  * Refresh an existing table index.
-  * @param $refIndexStruct Array with the reference index structure.
-  * @param $curIndexStruct Array with the current index structure.
-  */
-  public function refreshTableIndex($refIndexStruct, $curIndexStruct) {
-    $stmt = $this->indexDefUpdateStmt($refIndexStruct, $curIndexStruct);
-    $this->executeStmt($stmt);
-  }  // eo update index
-
-
-  /**
-  * Refresh an existing foreign key.
-  * @param $refFkStruct Array with the reference foreign key structure.
-  * @param $curFkStruct Array with the current foreign key structure.
-  */
-  public function refreshTableForeignKey($refFkStruct, $curFkStruct) {
-    $stmt = $this->foreignKeyDefUpdateStmt($refFkStruct, $curFkStruct);
-    $this->executeStmt($stmt);
-  }  // eo update foreign key
 
 
   /**
