@@ -110,6 +110,42 @@ abstract class OgerDbStruct {
   abstract public function addDbStruct($refDbStruct, $opts = array());
 
 
+  /**
+  * Update existing tables and columns and add missing one.
+  * @param $refStruct Array with the reference database structure.
+  * @param $curStruct Optional array with the current database structure.
+  *        If not present it is located from the associated database.
+  * @param $opts Optional options array.
+  */
+  public function updateDbStruct($refStruct, $curStruct = null, $opts = array()) {
+
+    $this->checkDriverCompat($refStruct);
+
+    // get current structure before adding missing parts
+    // because we dont have to refresh that
+    if ($curStruct === null) {
+      $curStruct = $this->getDbStruct();
+    }
+
+    // add mising tables, columns, indices - and foreign keys
+    $this->addDbStruct($refStruct, $curStruct);
+
+    // refresh existing tables and columns
+    $this->refreshDbStruct($refStruct, $curStruct);
+
+  }  // eo update struc
+
+
+
+
+
+
+
+
+
+
+
+
 
 
   /**
@@ -139,31 +175,6 @@ abstract class OgerDbStruct {
   */
   abstract public function columnDefAddStmt($columnStruct, $opts);
 
-
-  /**
-  * Update existing tables and columns and add missing one.
-  * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the current database structure.
-  *        If not present it is located from the associated database.
-  * @param $opts Optional options array.
-  */
-  public function updateDbStruct($refStruct, $curStruct = null, $opts = array()) {
-
-    $this->checkDriverCompat($refStruct);
-
-    // get current structure before adding missing parts
-    // because we dont have to refresh that
-    if ($curStruct === null) {
-      $curStruct = $this->getDbStruct();
-    }
-
-    // add mising tables, columns, indices - and foreign keys
-    $this->addDbStruct($refStruct, $curStruct);
-
-    // refresh existing tables and columns
-    $this->refreshDbStruct($refStruct, $curStruct);
-
-  }  // eo update struc
 
 
 

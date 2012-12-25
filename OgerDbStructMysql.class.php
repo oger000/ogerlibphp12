@@ -30,11 +30,6 @@ class OgerDbStructMysql extends OgerDbStruct {
   private $refDbStruct;
   private $curDbStruct;
 
-  private $refLowerTableName;
-  private $refLowerFs;
-  private $curLowerTableName;
-  private $curLowerFs;
-
 
 
   /**
@@ -343,7 +338,8 @@ class OgerDbStructMysql extends OgerDbStruct {
    * @param $curStruct Optional array with the current database structure.
    *        If not present it is located from the database connection.
   */
-  private function preProcessCheck($refDbStruct, $curDbStruct = null) {
+  private function preProcessCheck($refDbStruct = null, $curDbStruct = null) {
+
     $driverName = $refDbStruct["__DBSTRUCT_META__"]["__DRIVER_NAME__"];
     if ($driverName != "mysql") {
       throw new Exception ("Driver '$driverName' not compatible. Only driver 'mysql' supported.");
@@ -351,7 +347,6 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     if ($refDbStruct) {
       $this->refDbStruct = $refDbStruct;
-      $this->refLowerTableName = $refDbStruct["__SCHEMA_META__"]["lower_case_table_names"]
     }
     if (!$this->refDbStruct) {
       throw new Exception ("Reference database structure required.");
@@ -359,18 +354,49 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     if (!$this->curDbStruct) {
       $this->curDbStruct = $this->getDbStruct();
-      $this->curLowerTableName = $curDbStruct["__SCHEMA_META__"]["lower_case_table_names"]
     }
 
     // do not overwrite case sensitive database systems with lowercase converted reference structures
-    // TODO provide forceLowerCase and ignoreLowerCase options ???
-    if ($this->curLowerTableName != 1 && $this->refLowerTableName == 1) {
+    // TODO provide forceLowerCase or ignoreLowerCase option ???
+    if ($this->curDbStruct["__SCHEMA_META__"]["lower_case_table_names"] != 1 &&
+        $this->refDbStruct["__SCHEMA_META__"]["lower_case_table_names"] == 1) {
       throw new Exception ("It is not allowed to apply lower case forced (table) reference structures" .
                            " to a case sensitive database system.");
     }
 
   }  // eo prechecks
 
+
+  /**
+   * Handle table name lettercase changes.
+   * @param $refTableStruct Array with the reference table structure.
+   * @return True if the table was renamed because of lettercase change, false otherwise.
+  */
+  private function handleTableCase($refTableStruct, $reload = true) {
+
+    $refTableName = $refTableStruct["__TABLE_META__"]["TABLE_NAME"];
+    $tableKey = strtolower($refTableName);
+    $curTableName = $curTableStruct["__TABLES__"][$tableKey]["__TABLE_META__"]["TABLE_NAME"];
+
+    // table name can only differ in lettercase and this is only of
+    // interest on case sensitive systems
+    if ($refTableName != $curTableName &&
+        $this->curDbStruct["__SCHEMA_META__"]["lower_case_table_names"] != 1) {
+
+      $refTableName = $this->quoteName($refTableName);
+      $curTableName = $this->quoteName($curTableName);
+      $stmt = "RENAME TABLE {$curTableName} TO {$refTableName}";
+      $this->executeStmt($stmt);
+
+      if ($reload) [
+        $this->curDbStruct["__TABLES__"][$tableKey] = $this->getTableStruct($refTableName);
+      }
+
+      return true;
+    }  // eo rename lettercase
+
+    return false;
+  } // eo table name lettercase handling
 
 
   /**
@@ -425,6 +451,8 @@ class OgerDbStructMysql extends OgerDbStruct {
   *        - noForeignKeys
   */
   public function addTable($tableStruct, $opts = array()) {
+
+    $this->preProcessCheck();
 
     $tableMeta = $tableStruct["__TABLE_META__"];
     $tableName = $this->quoteName($tableMeta["TABLE_NAME"]);
@@ -488,10 +516,10 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function updateTable($refTableStruct = null, $opts = array()) {
 
-    $this->preProcessCheck($refTableStruct);
+    $this->preProcessCheck();
 
     if (!$opts["noRefresh"]) {
-      $this->refreshTable($refTableStruct, $curTableStruct);
+      $this->refreshTable($refTableStruct, $opts);
     }
 
     // add columns
@@ -531,6 +559,8 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function refreshTable($refTableStruct = null, $opts = array()) {
 
+    $this->preProcessCheck();
+
     $refTableMeta = $refTableStruct["__TABLE_META__"];
     $tableName = $refTableMeta["TABLE_NAME"];
     $tableKey = strtolower($tableName);
@@ -538,48 +568,25 @@ class OgerDbStructMysql extends OgerDbStruct {
     $curTableStruct = $this->curDbStruct["__TABLES__"][$tableKey];
     $curTableMeta = $this->curDbStruct["__TABLE_META__"];
 
-    // table name - check for different case
 
-TODO: CONTINUE HERE
-
-    $changed = false;
-    if ($refTableMeta["TABLE_NAME"] != $curTableMeta["TABLE_NAME"]) {
-      $changed = true;
-      // to nothing if only differ in case on windows
-      if (strtolower($refTableMeta["TABLE_NAME"]) == strtolower($curTableMeta["TABLE_NAME"]) &&
-          stripos("win", $this->sqlServerOs) !== false ) {
-        $changed = false;
-      }
-    }
-    if ($changed) {
-      $refTableName = $this->quoteName($refTableMeta["TABLE_NAME"]);
-      $curTableName = $this->quoteName($curTableMeta["TABLE_NAME"]);
-      $stmt = "RENAME TABLE {$refTableName} TO {$curTableName}";
-      $this->executeStmt($stmt);
+    // rename lettercase - reload current table structure
+    if ($this->handleTableCase($refTableStruct)) {
+      $curTableStruct = $this->curDbStruct["__TABLES__"][$tableKey];
     }
 
-    // table defaults
-    $changed = false;
-    if ($refTableMeta["TABLE_COLLATION"] != $curTableMeta["TABLE_COLLATION"]) {
-      $changed = true;
-    }
-    if ($refTableMeta["ENGINE"] != $curTableMeta["ENGINE"]) {
-      $changed = true;
-    }
+    // table meta / defaults
+    if ($refTableMeta["TABLE_COLLATION"] != $curTableMeta["TABLE_COLLATION"] ||
+        $refTableMeta["ENGINE"] != $curTableMeta["ENGINE"]) {
 
-    if ($changed) {
       $stmt .= "ALTER TABLE " .
-               $this->quoteName($curTableMeta["TABLE_NAME"]) .
+               $refTableName) .
                " ENGINE " . $refTableMeta["ENGINE"];
                " COLLATE " . $refTableMeta["TABLE_COLLATION"];
-    }
+      $this->executeStmt($stmt);
+    }  // eo table meta
 
 
 
-
-
-    $stmt = $this->tableDefUpdateStmt($refTableStruct, $curTableStruct);
-    $this->executeStmt($stmt);
 
     // refresh existing columns
     foreach ($refTableStruct["__COLUMNS__"] as $refColumnKey => $refColumnStruct) {
@@ -619,16 +626,6 @@ TODO: CONTINUE HERE
 
 
 
-
-
-
-
-  /**
-  * Create an alter table statement for table defaults.
-  * @param $refTableStruct Array with the reference table structure.
-  * @param $curTableStruct Array with the current table structure.
-  */
-  abstract public function tableDefUpdateStmt($refTableStruct, $curTableStruct);
 
 
 
@@ -844,14 +841,6 @@ TODO: CONTINUE HERE
   }  // eo add column
 
 
-  /**
-  * Create an alter table statement for table defaults.
-  * @see OgerDbStruct::columnDefAddStmt().
-  */
-  public function tableDefUpdateStmt($refTableStruct, $curTableStruct) {
-
-    return $stmt;
-  }  // eo update table
 
 
   /**
@@ -907,7 +896,7 @@ TODO: CONTINUE HERE
 
     // create change statement
     if ($refIndexSql != $curIndexSql) {
-      $this->log(static::LOG_NOTICE, "OLD: $curIndexSql\nNEW: $refIndexSql\n";
+      $this->log(static::LOG_NOTICE, "-- OLD: $curIndexSql\n-- NEW: $refIndexSql\n";
       $stmt = "ALTER TABLE $tableName DROP INDEX $indexName;" .
               "ALTER TABLE $tableName ADD $refIndexSql";
     }
@@ -930,7 +919,7 @@ TODO: CONTINUE HERE
 
     // create change statement
     if ($refFkSql != $curFkSql) {
-      $this->log(static::LOG_NOTICE, "OLD: $curFkSql\nNEW: $refFkSql\n";
+      $this->log(static::LOG_NOTICE, "-- OLD: $curFkSql\n-- NEW: $refFkSql\n";
       $stmt = "ALTER TABLE $tableName DROP FOREIGN KEY $fkName;" .
               "ALTER TABLE $tableName ADD $refFkSql";
     }
