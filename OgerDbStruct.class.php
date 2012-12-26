@@ -73,7 +73,7 @@ abstract class OgerDbStruct {
   *          If empty all tables are included.
   * @return Array with database structure.
   */
-  public public function getDbStruct($opts = array());
+  abstract public function getDbStruct($opts = array());
 
 
   /**
@@ -87,10 +87,10 @@ abstract class OgerDbStruct {
 
     $struct = array();
     $struct["__DBSTRUCT_META__"] = array(
-      "__DRIVER_NAME__" => $this->driverName,
-      "__DRIVER_INDEPENDENT__" => false,
-      "__SERIAL__" => $startTime,
-      "__TIME__" => date("c", $startTime),
+      "DRIVER_NAME" => $this->driverName,
+      "DRIVER_INDEPENDENT" => false,
+      "SERIAL" => $startTime,
+      "TIME" => date("c", $startTime),
     );
 
     $struct["__SCHEMA_META__"] = array();
@@ -102,7 +102,7 @@ abstract class OgerDbStruct {
 
   /**
   * Add missing tables, columns, indices or foreign keys to the database.
-  * @param $refStruct Array with the reference database structure.
+  * @param $refDbStruct Array with the reference database structure.
   * @param $opts Optional options array. Keys are options.<br>
   *        Valid optios are:<br>
   *        - noForeignKeys<br>
@@ -113,275 +113,40 @@ abstract class OgerDbStruct {
   /**
   * Refresh existing tables, columns, indices and foreign keys.
   * Do not add missing ones.
-  * @param $refStruct Array with the reference database structure.
+  * @param $refDbStruct Array with the reference database structure.
   */
-  abstract public function refreshDbStruct($refStruct = null;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  abstract public function refreshDbStruct($refDbStruct = null);
 
 
   /**
   * Update existing tables, columns, indices or foreign keys and add missing one.
-  * @param $refStruct Array with the reference database structure.
-  * @param $opts Optional options array.
+  * @param $refDbStruct Array with the reference database structure.
   */
-  public function updateDbStruct($refStruct, $opts = array()) {
-
-    $this->checkDriverCompat($refStruct);
-
-    // get current structure before adding missing parts
-    // because we dont have to refresh that
-    if ($curStruct === null) {
-      $curStruct = $this->getDbStruct();
-    }
-
-    // add mising tables, columns, indices - and foreign keys
-    $this->addDbStruct($refStruct, $curStruct);
-
-    // refresh existing tables and columns
-    $this->refreshDbStruct($refStruct, $curStruct);
-
-  }  // eo update struc
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  abstract public function updateDbStruct($refDbStruct);
 
 
   /**
-  * Order columns of tables.
-  * Order only columns of tables because the order of
-  * columns in indices and foreign keys is treated significant
-  * and therefore handled by refreshing.
-  * Tables do not have a specific order inside the database.
-  * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the current database structure.
-  *        If not present it is located from the associated database.
-  * @param $opts Optional options array.
+  * Reorder database structure.
+  * @param $refDbStruct Array with the reference database structure.
   */
-  public function reorderDbStruct($refStruct, $curStruct = null, $opts = array()) {
-
-    $this->checkDriverCompat($refStruct);
-
-    if ($curStruct === null) {
-      $curStruct = $this->getDbStruct();
-    }
-
-    foreach ($refStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
-      $curTableStruct = $curStruct["__TABLES__"][$refTableKey];
-      if ($curTableStruct) {
-        $this->reorderTableColumns($refTableStruct, $curTableStruct);
-      }
-    }  // eo table loop
-
-  }  // eo order db struct
-
-
-  /**
-  * Reorder table columns.
-  * @see OgerDbStruct::reorderTableColumns().
-  */
-  public function reorderTableColumns($refTableStruct, $curTableStruct){
-
-    $this->orderTableStructColumns($refTableStruct["__COLUMNS__"]);
-    $refColNames = array();
-    foreach ($refTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
-      $refColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
-    }
-
-    $this->orderTableStructColumns($curTableStruct["__COLUMNS__"]);
-    $curColNames = array();
-    foreach ($curTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
-      $curColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
-    }
-
-
-    // remove all column names that are not in both tables
-    // because they do not affect the reordering
-
-    foreach ($refColNames as $colKey => $colStruct) {
-      if (!$curColNames[$colKey]) {
-        unset($refColNames[$colKey]);
-      }
-    }
-
-    foreach ($curColNames as $colKey => $colStruct) {
-      if (!$refColNames[$colKey]) {
-        unset($curColNames[$colKey]);
-      }
-    }
-
-    $tableName = $this->quoteName($refTableStruct["__TABLE_META__"]["TABLE_NAME"]);
-
-    // use current column structure because we dont want to change the column but only the order
-    $afterColumn = "";
-    foreach ($refColNames as $columnName) {
-
-      $columnDef = $this->columnDefStmt($curTableStruct["__COLUMNS__"][$columnName], array("afterColumnName" => $afterColumn));
-      $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colName $columnDef";
-      $afterColumn = $colName;
-
-      $this->executeStmt($stmt);
-
-    }  // eo common column loop
-
-  }  // eo order table columns
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  abstract public function reorderDbStruct($refDbStruct);
 
 
   /**
   * Cleanup surpluss tables, columns, indices and foreign keys.
   * Despite the first impression not the given database struct is cleaned up
-  * but everything that is above.
-  * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the current database structure.
-  *        If not present it is located from the associated database.
-  * @param $opts Optional options array.
+  * but everything that is above is removed.
+  * @param $refDbStruct Array with the reference database structure.
   */
-  public function cleanupDbStruct($refStruct, $curStruct = null, $opts = array()) {
-
-    $this->checkDriverCompat($refStruct);
-
-    if ($curStruct === null) {
-      $curStruct = $this->getDbStruct();
-    }
-
-    // first cleanup foreign keys before we remove tables or columns
-    foreach ($curStruct["__TABLES__"] as $curTableKey => $curTableStruct) {
-      $refTableStruct = $refStruct["__TABLES__"][$curTableKey];
-      if (!$refTableStruct) {
-        continue;
-      }
-      $tableName = $this->quoteName($curTableStruct["__TABLE_META__"]["TABLE_NAME"]);
-      foreach ($curTableStruct["__FOREIGN_KEYS__"] as $fkKey => $fkStruct) {
-        if (!$refTableStruct["__FOREIGN_KEYS__"][$fkKey]) {
-          $fkName = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
-          $stmt = "ALTER TABLE {$tableName} DROP CONSTRAINT {$fkName}";
-          $this->executeStmt($stmt);
-        }
-      }
-    }  // table loop for foreign keys
-
-    // cleanup tables
-    foreach ($curStruct["__TABLES__"] as $curTableKey => $curTableStruct) {
-      $refTableStruct = $refStruct["__TABLES__"][$curTableKey];
-      $tableName = $this->quoteName($curTableStruct["__TABLE_META__"]["TABLE_NAME"]);
-      if (!$refTableStruct) {
-        $stmt = "DOP TABLE {$tableName}";
-        $this->executeStmt($stmt);
-      }
-      else {
-        // cleanup indices
-        foreach ($curTableStruct["__INDICES__"] as $curIndexKey => $curIndexStruct) {
-          if (!$refTableStruct["__INDICES__"][$curIndexKey]) {
-            $indexName = $this->quoteName($curIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
-            $stmt = "ALTER TABLE {$tableName} DROP INDEX {$indexName}";
-            $this->executeStmt($stmt);
-          }
-        }
-        // cleanup columns
-        foreach ($curTableStruct["__COLUMNS__"] as $curColumnKey => $curColumnStruct) {
-          if (!$refTableStruct["__COLUMNS__"][$curColumnKey]) {
-            $columnName = $this->quoteName($curColumnStruct["COLUMN_NAME"]);
-            $stmt = "ALTER TABLE {$tableName} DROP COLUMN {$columnName}";
-            $this->executeStmt($stmt);
-          }
-        }
-      }  // eo existing table
-    }  // eo table loop
-
-  }  // eo order db struct
+  abstract public function cleanupDbStruct($refDbStruct);
 
 
   /**
   * Force database structure.
-  * Forces the given database structure by adding, updating and deleting divergent structure.
-  * @param $refStruct Array with the reference database structure.
-  * @param $curStruct Optional array with the current database structure.
-  *        If not present it is located from the associated database.
-  * @param $opts Optional options array.
+  * Forces the given database structure by adding, refreshing, reordering and deleting divergent structure.
+  * @param $refDbStruct Array with the reference database structure.
   */
-  public function forceDbStruct($refStruct, $curStruct = null, $opts = array()) {
-
-    $this->checkDriverCompat($refStruct);
-
-    if ($curStruct === null) {
-      $curStruct = $this->getDbStruct();
-    }
-
-    $this->updateDbStruct($refStruct, $curStruct, $opts);
-
-    // do not hand over current struct because maybe heavily changed by updateDbStruct
-    $this->cleanupDbStruct($refStruct);
-
-  }  // eo order db struct
-
-
+  abstract public function forceDbStruct($refDbStruct);
 
 
 
@@ -389,44 +154,28 @@ abstract class OgerDbStruct {
   /**
   * Format the database struct array into a string.
   * This should result in a more diff friendly output.
-  * @param $struct Array with the database structure.
-  * @param $opts Optional options array.
-  * TODO not ready
+  * @param $dbStruct Array with the database structure.
   */
-  public function formatDbStruct($struct, $opts = array()) {
-
-    return var_export($struct, true);
-
-    $str = "array (\n";
-
-    $delim = "  ";
-    foreach ($struct as $key => $value) {
-      if ($key != "__TABLES__") {
-        $valueStr = var_export($value, true);
-        $valueStr = preg_replace("/\n\s*/s", " ", $valueStr);
-        $str .= "$delim'$key' => $valueStr";
-        $delim = ",\n  ";
-      }
-    };
-
-    $tables = $struct["__TABLES__"];
-    if (is_array($tables)) {
-      $str .= "{$delim}'__TABLES__' => ";
-      $valueStr = var_export($tables, true);
-      //$valueStr = preg_replace("/\n\s*/s", " ", $valueStr);
-      $str .= $valueStr;
-    }  // eo have tables
-
-
-    $str .= "\n)\n";
-
-    return $str;
+  public function formatDbStruct($dbStruct) {
+    // dummy implementation
+    return var_export($dbStruct, true);
   }  // eo format db struct
+
+
+
+
+
+
+
+
+
+
 
 
 
   // ############################################
   // some helper methods and setter/getter
+  // ############################################
 
 
   /**
@@ -499,14 +248,6 @@ abstract class OgerDbStruct {
     $this->log = "";
     return $ret;
   }  // eo flush log
-
-
-  /**
-  * Check for driver compatibility.
-  * @param $struct Database structure array.
-  * @param $throw Throw an exception if not compatible.
-  */
-  abstract public function checkDriverCompat($dbStruct);
 
 
   /**
