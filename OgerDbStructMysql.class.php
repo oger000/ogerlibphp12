@@ -86,19 +86,25 @@ class OgerDbStructMysql extends OgerDbStruct {
     $pstmt->execute();
     $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
-    $struct["__SCHEMA_META__"] = array_merge($schemaRecords, $struct["__SCHEMA_META__"]);
+    foreach ($schemaRecords as $schemaRecord) {
+      $struct["__SCHEMA_META__"][$schemaRecord["Variable_name"]] = $schemaRecord["Value"];
+    }
 
     $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE '%compile%'");
     $pstmt->execute();
     $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
-    $struct["__SCHEMA_META__"] = array_merge($schemaRecords, $struct["__SCHEMA_META__"]);
+    foreach ($schemaRecords as $schemaRecord) {
+      $struct["__SCHEMA_META__"][$schemaRecord["Variable_name"]] = $schemaRecord["Value"];
+    }
 
     $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE '%version%'");
     $pstmt->execute();
     $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
-    $struct["__SCHEMA_META__"] = array_merge($schemaRecords, $struct["__SCHEMA_META__"]);
+    foreach ($schemaRecords as $schemaRecord) {
+      $struct["__SCHEMA_META__"][$schemaRecord["Variable_name"]] = $schemaRecord["Value"];
+    }
 
 
     // get table structure
@@ -375,9 +381,16 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   private function handleTableCase($refTableStruct, $reload = true) {
 
+    $this->preProcessCheck();
+
     $refTableName = $refTableStruct["__TABLE_META__"]["TABLE_NAME"];
     $tableKey = strtolower($refTableName);
-    $curTableName = $curTableStruct["__TABLES__"][$tableKey]["__TABLE_META__"]["TABLE_NAME"];
+    $curTableName = $this->curDbStruct["__TABLES__"][$tableKey]["__TABLE_META__"]["TABLE_NAME"];
+
+    // if current table does not exist nothing can be renamed
+    if (!$curTableName) {
+      return false;
+    }
 
     // table name can only differ in lettercase and this is only of
     // interest on case sensitive systems
@@ -542,7 +555,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // foreign keys
     if (!$opts["noForeignKeys"]) {
-      foreach ($refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
+      foreach ((array)$refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
         if (!$curTableStruct["__FOREIGN_KEYS__"][$refFkKey]) {
           $this->addTableForeignKey($refFkStruct);
         }
@@ -965,36 +978,54 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @see OgerDbStruct::formatDbStruct().
   */
   public function formatDbStruct($dbStruct) {
+    //return parent::formatDbStruct($dbStruct);
+    return $this->formatDbStructHelper($dbStruct);
+  }
 
-    return parent::formatDbStruct($dbStruct);
+  /**
+  * Format the database struct array into a string.
+  * @see OgerDbStruct::formatDbStruct().
+  */
+  public function formatDbStructHelper($struct, $level = 0, $single = 0) {
 
+    $indent = 2;
+    $prefix = str_repeat(" ", $level * $indent);
+    $prefix2 = $prefix . str_repeat(" ", $indent);
+    $delim = "\n";
 
+    if ($single == 1) {
+      $prefix = " ";
+      $prefix2 = "";
+      $delim = " ";
+    }
 
-    $str = "array (\n";
-    $delim = "  ";
-    foreach (array("__DBSTRUCT_META__", "__SCHEMA_META__") as $topKey) {
-      if ($key != "__TABLES__") {
-        $valueStr = var_export($value, true);
-        $valueStr = preg_replace("/\n\s*/s", " ", $valueStr);
-        $str .= "$delim'$key' => $valueStr";
-        $delim = ",\n  ";
+    $str = "";
+    if (is_array($struct)) {
+      $str .= "array ({$delim}";
+      foreach ($struct as $key => $value) {
+        $nextLevel = $level + 1;
+        $nextSingle = $single;
+        if ($key == "__TABLE_META__" ||
+            $key == "__INDEX_META__" ||
+            $key == "__FOREIGN_KEY_META__" ||
+            $single == 2) {
+          $nextSingle = 1;
+        }
+        if ($key == "__COLUMNS__" ||
+            $key == "__INDEX_COLUMNS__" ||
+            $key == "__FOREIGN_KEY_COLUMNS__") {
+          $nextSingle = 2;
+        }
+        $str .= $prefix2 . var_export($key, true) . " => " . $this->formatDbStructHelper($value, $nextLevel, $nextSingle);
       }
-    };
-
-    $tables = $struct["__TABLES__"];
-    if (is_array($tables)) {
-      $str .= "{$delim}'__TABLES__' => ";
-      $valueStr = var_export($tables, true);
-      //$valueStr = preg_replace("/\n\s*/s", " ", $valueStr);
-      $str .= $valueStr;
-    }  // eo have tables
-
-
-    $str .= "\n)\n";
+      $str .= "{$prefix})" . ($level ? "," : "") . "\n";
+    }
+    else {
+      $str .= var_export($struct, true) . ",{$delim}";
+    }
 
     return $str;
   }  // eo format db struct
-
 
 
 
