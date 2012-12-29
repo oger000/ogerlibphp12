@@ -18,6 +18,14 @@
 * The structure does not contain privileges.<br>
 * We handle Collations (which in turn modifies charset).<br>
 */
+/* TODO
+ * - optimize speed
+ *   - by using change-counter and force reread of the current
+ *     database structure only if the changes happended.
+ *   - by handle some actions directly to the current database structure
+ *     (e.g. addTable, addTableColumn, ...).
+ *   - read structure at once and not per table.
+ */
 class OgerDbStructMysql extends OgerDbStruct {
 
 
@@ -166,7 +174,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }
 
     if (count($tableRecords) < 1) {
-      return $struct;
+      throw new Exception("No table schema found for table name {$tableName}.");
     }
 
 
@@ -364,7 +372,6 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $driverName = $this->refDbStruct["__DBSTRUCT_META__"]["DRIVER_NAME"];
     if ($driverName != "mysql") {
-      echo "\nmeta:\n"; var_export($this->refDbStruct["__DBSTRUCT_META__"]); echo "---\n\n";
       throw new Exception ("Driver '$driverName' not compatible. Only driver 'mysql' supported.");
     }
 
@@ -408,13 +415,19 @@ class OgerDbStructMysql extends OgerDbStruct {
     if ($refTableName != $curTableName &&
         $this->curDbStruct["__SCHEMA_META__"]["lower_case_table_names"] != 1) {
 
-      $refTableName = $this->quoteName($refTableName);
-      $curTableName = $this->quoteName($curTableName);
-      $stmt = "RENAME TABLE {$curTableName} TO {$refTableName}";
+      $refTableNameQ = $this->quoteName($refTableName);
+      $curTableNameQ = $this->quoteName($curTableName);
+      $stmt = "RENAME TABLE {$curTableNameQ} TO {$refTableNameQ}";
       $this->executeStmt($stmt);
 
+      // do not reload on dry-run because we did not rename
       if ($reload) {
-        $this->curDbStruct["__TABLES__"][$tableKey] = $this->getTableStruct($refTableName);
+        if ($this->getParam("dry-run")) {
+          $this->curDbStruct["__TABLES__"][$tableKey]["__TABLE_META__"]["TABLE_NAME"] = $refTableName;
+        }
+        else {
+          $this->curDbStruct["__TABLES__"][$tableKey] = $this->getTableStruct($refTableName);
+        }
       }
 
       return true;
@@ -459,6 +472,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo include foreign keys
 
     // invalide the current database struct array because we did not update internally
+    $this->log(static::LOG_NOTICE, "-- Invalidate current database structure.\n");
     $this->curDbStruct = null;
 
   }  // eo add db struc
@@ -637,6 +651,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo table loop
 
     // invalide the current database struct array because we did not update internally
+    $this->log(static::LOG_NOTICE, "-- Invalidate current database structure.\n");
     $this->curDbStruct = null;
 
   }  // eo refresh struc
@@ -663,8 +678,9 @@ class OgerDbStructMysql extends OgerDbStruct {
 
       $stmt .= "ALTER TABLE " .
                $this->quoteName($refTableMeta["TABLE_NAME"]) .
-               " ENGINE " . $refTableMeta["ENGINE"] .
-               " COLLATE " . $refTableMeta["TABLE_COLLATION"];
+               " ENGINE=" . $refTableMeta["ENGINE"] .
+               " DEFAULT" .
+               " COLLATE=" . $refTableMeta["TABLE_COLLATION"];
       $this->executeStmt($stmt);
     }  // eo table meta
 
@@ -824,6 +840,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo table loop
 
     // invalide the current database struct array because we did not update internally
+    $this->log(static::LOG_NOTICE, "-- Invalidate current database structure.\n");
     $this->curDbStruct = null;
 
   }  // eo order db struct
@@ -871,20 +888,29 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
     }
 
+
     $tableName = $this->quoteName($tableName);
     // use current column structure because we dont want to change the column definition but only the order
     $afterColumn = "";
-    foreach ((array)$refColNames as $columnName) {
+    foreach ((array)$refColNames as $colKey => $colName) {
 
-      $columnDef = $this->columnDefStmt($curTableStruct["__COLUMNS__"][$columnName], array("afterColumnName" => $afterColumn));
-      $stmt = "ALTER TABLE $tableName CHANGE COLUMN $columnName $columnDef";
-      $afterColumn = $columnName;
+      $nextCurColName = reset($curColNames);
 
-      $this->executeStmt($stmt);
+      if ($colName != $nextCurColName) {
+        $columnDef = $this->columnDefStmt($curTableStruct["__COLUMNS__"][$colKey], array("afterColumnName" => $afterColumn));
+        $colNameQ = $this->quoteName($colName);
+        $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colNameQ $columnDef";
+        $this->executeStmt($stmt);
+      }
 
+      $afterColumn = $colName;
+
+      // remove the processed column name from the unused current column names
+      unset($curColNames[$colKey]);
     }  // eo common column loop
 
   }  // eo order table columns
+//echo var_export($curTableStruct); exit;
 
 
 
@@ -933,7 +959,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       $tableName = $this->quoteName($curTableStruct["__TABLE_META__"]["TABLE_NAME"]);
 
       if (!$refTableStruct) {
-        $stmt = "DOP TABLE {$tableName}";
+        $stmt = "DROP TABLE {$tableName}";
         $this->executeStmt($stmt);
       }
       else {
@@ -957,6 +983,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo table loop
 
      // invalide the current database struct array because we did not update internally
+    $this->log(static::LOG_NOTICE, "-- Invalidate current database structure.\n");
     $this->curDbStruct = null;
 
  }  // eo order db struct
@@ -980,6 +1007,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->updateDbStruct(null);
     $this->cleanupDbStruct(null);
+    $this->reorderDbStruct(null);
 
   }  // eo order db struct
 
@@ -1002,14 +1030,14 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Format the database struct array into a string.
   * @see OgerDbStruct::formatDbStruct().
   */
-  public function formatDbStructHelper($struct, $level = 0, $single = 0) {
+  public function formatDbStructHelper($struct, $level = 0, $singleLine = 0) {
 
     $indent = 2;
     $prefix = str_repeat(" ", $level * $indent);
     $prefix2 = $prefix . str_repeat(" ", $indent);
     $delim = "\n";
 
-    if ($single == 1) {
+    if ($singleLine == 1) {
       $prefix = " ";
       $prefix2 = "";
       $delim = " ";
@@ -1020,21 +1048,21 @@ class OgerDbStructMysql extends OgerDbStruct {
       $str .= "array ({$delim}";
       foreach ($struct as $key => $value) {
         $nextLevel = $level + 1;
-        $nextSingle = $single;
-        if ($single > 1) {
-          $nextSingle = $single -1;
+        $nextSingleLine = $singleLine;
+        if ($singleLine > 1) {
+          $nextSingleLine = $singleLine -1;
         }
         if ($key == "__TABLE_META__" ||
             $key == "__INDEX_META__" ||
             $key == "__FOREIGN_KEY_META__") {
-          $nextSingle = 1;
+          $nextSingleLine = 1;
         }
         if ($key == "__COLUMNS__" ||
             $key == "__INDEX_COLUMNS__" ||
             $key == "__FOREIGN_KEY_COLUMNS__") {
-          $nextSingle = 2;
+          $nextSingleLine = 2;
         }
-        $str .= $prefix2 . var_export($key, true) . " => " . $this->formatDbStructHelper($value, $nextLevel, $nextSingle);
+        $str .= $prefix2 . var_export($key, true) . " => " . $this->formatDbStructHelper($value, $nextLevel, $nextSingleLine);
       }
       $str .= "{$prefix})" . ($level ? "," : "") . "\n";
     }
