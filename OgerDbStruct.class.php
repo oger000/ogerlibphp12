@@ -88,7 +88,6 @@ abstract class OgerDbStruct {
     $struct = array();
     $struct["__DBSTRUCT_META__"] = array(
       "DRIVER_NAME" => $this->driverName,
-      "DRIVER_INDEPENDENT" => false,
       "SERIAL" => $startTime,
       "TIME" => date("c", $startTime),
     );
@@ -181,7 +180,7 @@ abstract class OgerDbStruct {
   /**
   * Set parameter.
   * @param $name Parameter name.
-  * Valid parameter names are: dryrun, loglevel.
+  * Valid parameter names are: dry-run, log-level.
   * @param $value New parameter value.
   * @return Old parameter value.
   */

@@ -28,13 +28,14 @@ $dbs2 = new OgerDbStructMysql($dbh2, $dbName2);
 
 $dbs2->setParam("log-level", OgerDbStruct::LOG_NOTICE);
 $dbs2->setParam("echo-log", true);
-$dbs2->setParam("dry-run", true);
+
+//$dbs2->setParam("dry-run", true);
 
 
 
 $dbStruct1 = $dbs1->getDbStruct();
-echo $dbs1->formatDbStruct($dbStruct1);
-echo "\n\n";
+//echo $dbs1->formatDbStruct($dbStruct1); echo "\n\n";
+//$dbs2->startReverseMode($dbStruct1);
 $dbs2->forceDbStruct($dbStruct1);
 
 
