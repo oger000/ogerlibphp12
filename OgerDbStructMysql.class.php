@@ -910,7 +910,6 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo common column loop
 
   }  // eo order table columns
-//echo var_export($curTableStruct); exit;
 
 
 
