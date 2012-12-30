@@ -20,8 +20,6 @@
 */
 /* TODO
  * - optimize speed
- *   - by using change-counter and force reread of the current
- *     database structure only if the changes happended.
  *   - by handle some actions directly to the current database structure
  *     (e.g. addTable, addTableColumn, ...).
  *   - read structure at once and not per table.
@@ -40,6 +38,8 @@ class OgerDbStructMysql extends OgerDbStruct {
 
   private $reverseMode;
   private $initialRefDbStruct;
+
+  private $curDiffCounter = 0;
 
 
   /**
@@ -69,6 +69,9 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @see OgerDbStruct::getDbStruct().
   */
   public function getDbStruct($opts = array()) {
+
+    // reset internal diff counter
+    $this->curDiffCounter = 0;
 
     // in reverse mode return the initial reference structure
     if ($this->reverseMode) {
@@ -472,8 +475,10 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo include foreign keys
 
     // invalide the current database struct array because we did not update internally
-    $this->log(static::LOG_NOTICE, "-- Invalidate current database structure.\n");
-    $this->curDbStruct = null;
+    if ($this->curDiffCounter > 0) {
+      $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
+      $this->curDbStruct = null;
+    }
 
   }  // eo add db struc
 
@@ -651,8 +656,10 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo table loop
 
     // invalide the current database struct array because we did not update internally
-    $this->log(static::LOG_NOTICE, "-- Invalidate current database structure.\n");
-    $this->curDbStruct = null;
+    if ($this->curDiffCounter > 0) {
+      $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
+      $this->curDbStruct = null;
+    }
 
   }  // eo refresh struc
 
@@ -840,8 +847,10 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo table loop
 
     // invalide the current database struct array because we did not update internally
-    $this->log(static::LOG_NOTICE, "-- Invalidate current database structure.\n");
-    $this->curDbStruct = null;
+    if ($this->curDiffCounter > 0) {
+      $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
+      $this->curDbStruct = null;
+    }
 
   }  // eo order db struct
 
@@ -981,9 +990,11 @@ class OgerDbStructMysql extends OgerDbStruct {
       }  // eo existing table
     }  // eo table loop
 
-     // invalide the current database struct array because we did not update internally
-    $this->log(static::LOG_NOTICE, "-- Invalidate current database structure.\n");
-    $this->curDbStruct = null;
+    // invalide the current database struct array because we did not update internally
+    if ($this->curDiffCounter > 0) {
+      $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
+      $this->curDbStruct = null;
+    }
 
  }  // eo order db struct
 
@@ -1102,6 +1113,16 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
 
+  /**
+  * Prepares and executes an sql statement.
+  * @see OgerDbStruct::executeStmt().
+  */
+  public function executeStmt($stmt, $values = array()) {
+    parent::executeStmt($stmt, $values);
+    if (!$this->getParam("dry-run")) {
+      $this->curDiffCounter++;
+    }
+  }  // eo execute stmt
 
 
 
