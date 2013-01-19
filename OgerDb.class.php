@@ -26,15 +26,15 @@ class OgerDb {
 
 
   /**
-  * Create statement string for insert or update.
+  * Create a SQL string for insert or update.
   * @param $action Sql action (INSERT or UPDATE).
-  * @param $table  Table name.
+  * @param $tableName  Table name.
   * @param $fields Array with field names.
   * @param string|array $where  Optional SQL WHERE clause.
-  *                String or array without the WHERE keyword. An array is passed to static::createWhereStmt().
+  *                String or array without the WHERE keyword. An array is passed to whereStmt().
   * @return String with created sql command.
   */
-  public static function createStmt($action, $table, $fields, $where = "") {
+  public static function sqlStmt($action, $tableName, $fields, $where = "") {
 
     switch ($action) {
     case self::ACTION_INSERT:
@@ -42,20 +42,20 @@ class OgerDb {
         $fieldStmt .= ($fieldStmt ? "," : '') . "{static::$escNamBegin}$field{static::$escNamEnd}";
         $valueStmt .= ($valueStmt ? "," : '') . ":$field";
       }
-      $stmt .= "INSERT INTO {static::$escNamBegin}$table{static::$escNamEnd} ($fieldStmt) VALUES ($valueStmt)";
+      $stmt .= "INSERT INTO {static::$escNamBegin}$tableName{static::$escNamEnd} ($fieldStmt) VALUES ($valueStmt)";
       break;
     case self::ACTION_UPDATE:
       foreach ($fields as $field) {
         $stmtSet .= ($stmtSet ? "," : '') . "{static::$escNamBegin}$field{static::$escNamEnd}=:$field";
       }
-      $stmt .= "UPDATE {static::$escNamBegin}$table{static::$escNamEnd} SET $stmtSet";
+      $stmt .= "UPDATE {static::$escNamBegin}$tableName{static::$escNamEnd} SET $stmtSet";
       break;
     default:
       throw new Exception("Unknown " . __CLASS__ . "::action: $action.");
     }
 
     if (is_array($where)) {
-      $where = static::createWhereStmt($where);
+      $where = static::whereStmt($where);
     }
     if ($where) {
       $stmt .= " WHERE $where";
@@ -92,7 +92,7 @@ class OgerDb {
       }
     }
 
-    // check for too much params
+    // check for surplus params
     $stmtParams = array_flip($stmtParams);
     foreach ($execParams as $execParam) {
       if (!array_key_exists($execParam, $stmtParams)) {
@@ -139,11 +139,11 @@ class OgerDb {
   *                 Defaults to "AND".
   * @return String with WHERE clause without the WHERE keyword.
   */
-  public static function createWhereStmt($params, $glueOp = "AND") {
+  public static function whereStmt($params, $glueOp = "AND") {
 
     $stmt = '';
 
-    // try to detect associative arrays and use array_keys instead
+    // if not an associative array use values as key (parameter name)
     if (!Oger::isAssocArray($params)) {
       $params = array_flip($params);
     }
@@ -182,6 +182,29 @@ class OgerDb {
     return $stmt;
   } // end of create where
 
+
+  /**
+  * Clean up an array with WHERE parameters for usage in execute().
+  * An array with WHERE parameters can contain additional information
+  * beside the value. So we have to cleanup before being used in execute().
+  * @param $params  An assoziative array with parameter names as key
+  *        and WHERE information as value.
+  * @return Array with WHERE information reduced to the plain value.
+  */
+  public static function getCleanWhereVals($values) {
+
+    $whereVals = array();
+
+    // the value can contain additional information that is cleared now
+    foreach ((array)$values as $key => $value) {
+      if (is_array($value)) {
+        $value = $value['value'];
+      }
+      $whereVals[$key] = $value;
+    }
+
+    return $whereVals;
+  } // end of clean where vals
 
 
 }  // eo class
