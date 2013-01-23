@@ -98,14 +98,14 @@ class OgerDbStructMysql extends OgerDbStruct {
     if (count($schemaRecords) < 1) {
       throw new Exception("No schema found for database name {$this->dbName}.");
     }
-    $struct["__SCHEMA_META__"] = $schemaRecords[0];
+    $struct["SCHEMA_META"] = $schemaRecords[0];
 
     $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE '%case%'");
     $pstmt->execute();
     $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
     foreach ((array)$schemaRecords as $schemaRecord) {
-      $struct["__SCHEMA_META__"][$schemaRecord["Variable_name"]] = $schemaRecord["Value"];
+      $struct["SCHEMA_META"][$schemaRecord["Variable_name"]] = $schemaRecord["Value"];
     }
 
     $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE '%compile%'");
@@ -113,7 +113,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
     foreach ((array)$schemaRecords as $schemaRecord) {
-      $struct["__SCHEMA_META__"][$schemaRecord["Variable_name"]] = $schemaRecord["Value"];
+      $struct["SCHEMA_META"][$schemaRecord["Variable_name"]] = $schemaRecord["Value"];
     }
 
     $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE '%version%'");
@@ -121,7 +121,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     $schemaRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
     foreach ((array)$schemaRecords as $schemaRecord) {
-      $struct["__SCHEMA_META__"][$schemaRecord["Variable_name"]] = $schemaRecord["Value"];
+      $struct["SCHEMA_META"][$schemaRecord["Variable_name"]] = $schemaRecord["Value"];
     }
 
 
@@ -144,7 +144,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     foreach ((array)$tableRecords as $tableRecord) {
       $tableName = $tableRecord["TABLE_NAME"];
       $tableKey = strtolower($tableName);
-      $struct["__TABLES__"][$tableKey] = $this->getTableStruct($tableName);
+      $struct["TABLES"][$tableKey] = $this->getTableStruct($tableName);
     }  // eo table loop
 
 
@@ -184,7 +184,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     $tableRecord = reset($tableRecords);
     $tableKey = strtolower($tableName);
 
-    $struct["__TABLE_META__"] = $tableRecord;
+    $struct["TABLE_META"] = $tableRecord;
 
 
     // -------------------
@@ -215,7 +215,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       $columnName = $columnRecord["COLUMN_NAME"];
       $columnKey = strtolower($columnName);
 
-      $struct["__COLUMNS__"][$columnKey] = $columnRecord;
+      $struct["COLUMNS"][$columnKey] = $columnRecord;
 
     }  // eo column loop
 
@@ -253,13 +253,13 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
 
       // the meta info is taken from the last column info which overwrites the prevous meta info
-      $struct["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_NAME"] = $indexName;
-      $struct["__INDICES__"][$indexKey]["__INDEX_META__"]["INDEX_KEY_TYPE"] = $indexType;
-      $struct["__INDICES__"][$indexKey]["__INDEX_META__"]["TABLE_NAME"] = $indexRecord["TABLE_NAME"];
+      $struct["INDICES"][$indexKey]["INDEX_META"]["INDEX_NAME"] = $indexName;
+      $struct["INDICES"][$indexKey]["INDEX_META"]["INDEX_KEY_TYPE"] = $indexType;
+      $struct["INDICES"][$indexKey]["INDEX_META"]["TABLE_NAME"] = $indexRecord["TABLE_NAME"];
 
       // index columns
       $indexColumnKey = strtolower($indexRecord["COLUMN_NAME"]);
-      $struct["__INDICES__"][$indexKey]["__INDEX_COLUMNS__"][$indexColumnKey] = $indexRecord;
+      $struct["INDICES"][$indexKey]["INDEX_COLUMNS"][$indexColumnKey] = $indexRecord;
 
     }  // eo index loop
 
@@ -309,14 +309,14 @@ class OgerDbStructMysql extends OgerDbStruct {
       $fkKey = strtolower($fkName);
 
       // the meta info is taken from the last entry info which overwrites the prevous meta info
-      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"] = $fkName;
-      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["TABLE_NAME"] = $fkRecord["TABLE_NAME"];
-      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_SCHEMA"] = $fkRecord["REFERENCED_TABLE_SCHEMA"];
-      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["REFERENCED_TABLE_NAME"] = $fkRecord["REFERENCED_TABLE_NAME"];
+      $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"] = $fkName;
+      $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["TABLE_NAME"] = $fkRecord["TABLE_NAME"];
+      $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["REFERENCED_TABLE_SCHEMA"] = $fkRecord["REFERENCED_TABLE_SCHEMA"];
+      $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["REFERENCED_TABLE_NAME"] = $fkRecord["REFERENCED_TABLE_NAME"];
 
       // referenced columns
       $fkColumnKey = strtolower($fkRecord["COLUMN_NAME"]);
-      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_COLUMNS__"][$fkColumnKey] = $fkRecord;
+      $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_COLUMNS"][$fkColumnKey] = $fkRecord;
 
     }  // eo foreign key columns loop
 
@@ -345,9 +345,9 @@ class OgerDbStructMysql extends OgerDbStruct {
       $fkKey = strtolower($fkName);
 
       // complete the meta info
-      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["MATCH_OPTION"] = $fkRulesRecord["MATCH_OPTION"];
-      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["UPDATE_RULE"] = $fkRulesRecord["UPDATE_RULE"];
-      $struct["__FOREIGN_KEYS__"][$fkKey]["__FOREIGN_KEY_META__"]["DELETE_RULE"] = $fkRulesRecord["DELETE_RULE"];
+      $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["MATCH_OPTION"] = $fkRulesRecord["MATCH_OPTION"];
+      $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["UPDATE_RULE"] = $fkRulesRecord["UPDATE_RULE"];
+      $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["DELETE_RULE"] = $fkRulesRecord["DELETE_RULE"];
 
     }  // eo foreign key columns loop
 
@@ -373,7 +373,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       throw new Exception ("Reference database structure required.");
     }
 
-    $driverName = $this->refDbStruct["__DBSTRUCT_META__"]["DRIVER_NAME"];
+    $driverName = $this->refDbStruct["DBSTRUCT_META"]["DRIVER_NAME"];
     if ($driverName != "mysql") {
       throw new Exception ("Driver '$driverName' not compatible. Only driver 'mysql' supported.");
     }
@@ -386,8 +386,8 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // do not overwrite case sensitive database systems with lowercase converted reference structures
     // TODO provide forceLowerCase or ignoreLowerCase option ???
-    if ($this->curDbStruct["__SCHEMA_META__"]["lower_case_table_names"] != 1 &&
-        $this->refDbStruct["__SCHEMA_META__"]["lower_case_table_names"] == 1) {
+    if ($this->curDbStruct["SCHEMA_META"]["lower_case_table_names"] != 1 &&
+        $this->refDbStruct["SCHEMA_META"]["lower_case_table_names"] == 1) {
       throw new Exception ("It is not allowed to apply lower case forced (table) reference structures" .
                            " to a case sensitive database system.");
     }
@@ -404,9 +404,9 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck();
 
-    $refTableName = $refTableStruct["__TABLE_META__"]["TABLE_NAME"];
+    $refTableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
     $tableKey = strtolower($refTableName);
-    $curTableName = $this->curDbStruct["__TABLES__"][$tableKey]["__TABLE_META__"]["TABLE_NAME"];
+    $curTableName = $this->curDbStruct["TABLES"][$tableKey]["TABLE_META"]["TABLE_NAME"];
 
     // if current table does not exist nothing can be renamed
     if (!$curTableName) {
@@ -416,7 +416,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     // table name can only differ in lettercase and this is only of
     // interest on case sensitive systems
     if ($refTableName != $curTableName &&
-        $this->curDbStruct["__SCHEMA_META__"]["lower_case_table_names"] != 1) {
+        $this->curDbStruct["SCHEMA_META"]["lower_case_table_names"] != 1) {
 
       $refTableNameQ = $this->quoteName($refTableName);
       $curTableNameQ = $this->quoteName($curTableName);
@@ -426,10 +426,10 @@ class OgerDbStructMysql extends OgerDbStruct {
       // do not reload on dry-run because we did not rename
       if ($reload) {
         if ($this->getParam("dry-run")) {
-          $this->curDbStruct["__TABLES__"][$tableKey]["__TABLE_META__"]["TABLE_NAME"] = $refTableName;
+          $this->curDbStruct["TABLES"][$tableKey]["TABLE_META"]["TABLE_NAME"] = $refTableName;
         }
         else {
-          $this->curDbStruct["__TABLES__"][$tableKey] = $this->getTableStruct($refTableName);
+          $this->curDbStruct["TABLES"][$tableKey] = $this->getTableStruct($refTableName);
         }
       }
 
@@ -454,10 +454,10 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck($refDbStruct);
 
-    foreach ((array)$this->refDbStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
+    foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
 
-      $refTableName = $refTableStruct["__TABLE_META__"]["TABLE_NAME"];
-      $curTableStruct = $this->curDbStruct["__TABLES__"][$refTableKey];
+      $refTableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
+      $curTableStruct = $this->curDbStruct["TABLES"][$refTableKey];
       if (!$curTableStruct) {
         $this->addTable($refTableStruct, array("noForeignKeys" => true));
       }
@@ -469,7 +469,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // add foreign keys after all tables, columns and indices has been created
     if (!$opts["noForeignKeys"]) {
-      foreach ((array)$this->refDbStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
+      foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
         $this->addTableElements($refTableStruct, array("noColumns" => true, "noIndices" => true));
       }  // eo table loop for foreign keys
     }  // eo include foreign keys
@@ -495,30 +495,30 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck();
 
-    $tableMeta = $tableStruct["__TABLE_META__"];
+    $tableMeta = $tableStruct["TABLE_META"];
     $tableName = $this->quoteName($tableMeta["TABLE_NAME"]);
 
     $stmt = "CREATE TABLE $tableName (\n  ";
 
     // force column order
-    $this->orderTableStructColumns($tableStruct["__COLUMNS__"]);
+    $this->orderTableStructColumns($tableStruct["COLUMNS"]);
 
     $delim = "";
-    foreach ((array)$tableStruct["__COLUMNS__"] as $columnStruct) {
+    foreach ((array)$tableStruct["COLUMNS"] as $columnStruct) {
       $stmt .= $delim . $this->columnDefStmt($columnStruct);
       $delim = ",\n  ";
     }  // eo column loop
 
     // indices
     if (!$opts["noIndices"]) {
-      foreach ((array)$tableStruct["__INDICES__"] as $indexKey => $indexStruct) {
+      foreach ((array)$tableStruct["INDICES"] as $indexKey => $indexStruct) {
         $stmt .= $delim . $this->indexDefStmt($indexStruct);
       }  // eo index loop
     }  // eo include indices
 
     // foreign keys
     if (!$opts["noForeignKeys"]) {
-      foreach ((array)$tableStruct["__FOREIGN_KEYS__"] as $fkKey => $fkStruct) {
+      foreach ((array)$tableStruct["FOREIGN_KEYS"] as $fkKey => $fkStruct) {
         $stmt .= $delim . $this->foreignKeyDefStmt($fkStruct);
       }  // eo constraint loop
     }  // eo include foreign keys
@@ -557,14 +557,14 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // rename lettercase - reload current table structure
     $this->handleTableCase($refTableStruct);
-    $curTableStruct = $this->curDbStruct["__TABLES__"][strtolower($refTableStruct["__TABLE_META__"]["TABLE_NAME"])];
+    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
 
     // add columns
     if (!$opts["noColumns"]) {
-      $this->orderTableStructColumns($refTableStruct["__COLUMNS__"]);
+      $this->orderTableStructColumns($refTableStruct["COLUMNS"]);
       $afterColumnName = "";
-      foreach ((array)$refTableStruct["__COLUMNS__"] as $refColumnKey => $refColumnStruct) {
-        if (!$curTableStruct["__COLUMNS__"][$refColumnKey]) {
+      foreach ((array)$refTableStruct["COLUMNS"] as $refColumnKey => $refColumnStruct) {
+        if (!$curTableStruct["COLUMNS"][$refColumnKey]) {
           $this->addTableColumn($refColumnStruct, array("afterColumnName" => $afterColumnName));
         }
         // this column exists (old or new created) so the next missing column will be added after this
@@ -574,8 +574,8 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // indices
     if (!$opts["noIndices"]) {
-      foreach ((array)$refTableStruct["__INDICES__"] as $refIndexKey => $refIndexStruct) {
-        if (!$curTableStruct["__INDICES__"][$refIndexKey]) {
+      foreach ((array)$refTableStruct["INDICES"] as $refIndexKey => $refIndexStruct) {
+        if (!$curTableStruct["INDICES"][$refIndexKey]) {
           $this->addTableIndex($refIndexStruct);
         }
       }
@@ -583,8 +583,8 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // foreign keys
     if (!$opts["noForeignKeys"]) {
-      foreach ((array)$refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
-        if (!$curTableStruct["__FOREIGN_KEYS__"][$refFkKey]) {
+      foreach ((array)$refTableStruct["FOREIGN_KEYS"] as $refFkKey => $refFkStruct) {
+        if (!$curTableStruct["FOREIGN_KEYS"][$refFkKey]) {
           $this->addTableForeignKey($refFkStruct);
         }
       }
@@ -616,7 +616,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @param $indexStruct Array with the index structure.
   */
   public function addTableIndex($indexStruct) {
-    $tableName = $this->quoteName($indexStruct["__INDEX_META__"]["TABLE_NAME"]);
+    $tableName = $this->quoteName($indexStruct["INDEX_META"]["TABLE_NAME"]);
     $stmt = "ALTER TABLE $tableName ADD " . $this->indexDefStmt($indexStruct, $opts);
     $this->executeStmt($stmt);
   }  // eo add index
@@ -627,7 +627,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @param $fkStruct Array with the foreign key structure.
   */
   public function addTableForeignKey($fkStruct) {
-    $tableName = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
+    $tableName = $this->quoteName($fkStruct["FOREIGN_KEY_META"]["TABLE_NAME"]);
     $stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct, $opts);
     $this->executeStmt($stmt);
   }  // eo add foreign key
@@ -648,8 +648,8 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->preProcessCheck($refDbStruct);
 
     // refresh current table if exits
-    foreach ((array)$this->refDbStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
-      $curTableStruct = $this->curDbStruct["__TABLES__"][$refTableKey];
+    foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
+      $curTableStruct = $this->curDbStruct["TABLES"][$refTableKey];
       if ($curTableStruct) {
         $this->refreshTable($refTableStruct);
       }
@@ -675,11 +675,11 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // rename lettercase - reload current table structure
     $this->handleTableCase($refTableStruct);
-    $curTableStruct = $this->curDbStruct["__TABLES__"][strtolower($refTableStruct["__TABLE_META__"]["TABLE_NAME"])];
+    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
 
     // table meta / defaults
-    $refTableMeta = $refTableStruct["__TABLE_META__"];
-    $curTableMeta = $curTableStruct["__TABLE_META__"];
+    $refTableMeta = $refTableStruct["TABLE_META"];
+    $curTableMeta = $curTableStruct["TABLE_META"];
     if ($refTableMeta["TABLE_COLLATION"] != $curTableMeta["TABLE_COLLATION"] ||
         $refTableMeta["ENGINE"] != $curTableMeta["ENGINE"]) {
 
@@ -693,22 +693,22 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
     // refresh existing columns
-    foreach ((array)$refTableStruct["__COLUMNS__"] as $refColumnKey => $refColumnStruct) {
-      if ($curTableStruct["__COLUMNS__"][$refColumnKey]) {
+    foreach ((array)$refTableStruct["COLUMNS"] as $refColumnKey => $refColumnStruct) {
+      if ($curTableStruct["COLUMNS"][$refColumnKey]) {
         $this->refreshTableColumn($refColumnStruct);
       }
     }
 
     // refresh existing indices
-    foreach ((array)$refTableStruct["__INDICES__"] as $refIndexKey => $refIndexStruct) {
-      if ($curTableStruct["__INDICES__"][$refIndexKey]) {
+    foreach ((array)$refTableStruct["INDICES"] as $refIndexKey => $refIndexStruct) {
+      if ($curTableStruct["INDICES"][$refIndexKey]) {
         $this->refreshTableIndex($refIndexStruct);
       }
     }
 
     // refresh existing foreign keys
-    foreach ((array)$refTableStruct["__FOREIGN_KEYS__"] as $refFkKey => $refFkStruct) {
-      if ($curTableStruct["__FOREIGN_KEYS__"][$refFkKey]) {
+    foreach ((array)$refTableStruct["FOREIGN_KEYS"] as $refFkKey => $refFkStruct) {
+      if ($curTableStruct["FOREIGN_KEYS"][$refFkKey]) {
         $this->refreshTableForeignKey($refFkStruct);
       }
     }
@@ -723,8 +723,8 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function refreshTableColumn($refColumnStruct) {
 
-    $curColumnStruct = $this->curDbStruct["__TABLES__"][strtolower($refColumnStruct["TABLE_NAME"])]
-                       ["__COLUMNS__"][strtolower($refColumnStruct["COLUMN_NAME"])];
+    $curColumnStruct = $this->curDbStruct["TABLES"][strtolower($refColumnStruct["TABLE_NAME"])]
+                       ["COLUMNS"][strtolower($refColumnStruct["COLUMN_NAME"])];
 
     $refColumnSql = $this->columnDefStmt($refColumnStruct);
     $curColumnSql = $this->columnDefStmt($curColumnStruct);
@@ -750,16 +750,16 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function refreshTableIndex($refIndexStruct) {
 
-    $curIndexStruct = $this->curDbStruct["__TABLES__"][strtolower($refIndexStruct["__INDEX_META__"]["TABLE_NAME"])]
-                      ["__INDICES__"][strtolower($refIndexStruct["__INDEX_META__"]["INDEX_NAME"])];
+    $curIndexStruct = $this->curDbStruct["TABLES"][strtolower($refIndexStruct["INDEX_META"]["TABLE_NAME"])]
+                      ["INDICES"][strtolower($refIndexStruct["INDEX_META"]["INDEX_NAME"])];
 
     $refIndexSql = $this->indexDefStmt($refIndexStruct);
     $curIndexSql = $this->indexDefStmt($curIndexStruct);
 
     if ($refIndexSql != $curIndexSql) {
 
-      $tableName = $this->quoteName($refIndexStruct["__INDEX_META__"]["TABLE_NAME"]);
-      $curIndexName = $this->quoteName($curIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
+      $tableName = $this->quoteName($refIndexStruct["INDEX_META"]["TABLE_NAME"]);
+      $curIndexName = $this->quoteName($curIndexStruct["INDEX_META"]["INDEX_NAME"]);
 
       $this->log(static::LOG_NOTICE, "-- Old: $curIndexSql\n" .
                                      "-- New: $refIndexSql\n");
@@ -777,16 +777,16 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function refreshTableForeignKey($refFkStruct) {
 
-    $curFkStruct = $this->curDbStruct["__TABLES__"][strtolower($refFkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"])]
-                      ["__FOREIGN_KEYS__"][strtolower($refFkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"])];
+    $curFkStruct = $this->curDbStruct["TABLES"][strtolower($refFkStruct["FOREIGN_KEY_META"]["TABLE_NAME"])]
+                      ["FOREIGN_KEYS"][strtolower($refFkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"])];
 
     $refFkSql = $this->foreignKeyDefStmt($refFkStruct);
     $curFkSql = $this->foreignKeyDefStmt($curFkStruct);
 
     if ($refFkSql != $curFkSql) {
 
-      $tableName = $this->quoteName($refFkStruct["__FOREIGN_KEY_META__"]["TABLE_NAME"]);
-      $curFkName = $this->quoteName($curFkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+      $tableName = $this->quoteName($refFkStruct["FOREIGN_KEY_META"]["TABLE_NAME"]);
+      $curFkName = $this->quoteName($curFkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"]);
 
       $this->log(static::LOG_NOTICE, "-- Old: $curFkSql\n" .
                                      "-- New: $refFkSql\n");
@@ -839,8 +839,8 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck($refDbStruct);
 
-    foreach ((array)$this->refDbStruct["__TABLES__"] as $refTableKey => $refTableStruct) {
-      $curTableStruct = $this->curDbStruct["__TABLES__"][$refTableKey];
+    foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
+      $curTableStruct = $this->curDbStruct["TABLES"][$refTableKey];
       if ($curTableStruct) {
         $this->reorderTableColumns($refTableStruct);
       }
@@ -863,22 +863,22 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck();
 
-    $tableName = $refTableStruct["__TABLE_META__"]["TABLE_NAME"];
+    $tableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
 
     // rename lettercase - reload current table structure
     $this->handleTableCase($refTableStruct);
-    $curTableStruct = $this->curDbStruct["__TABLES__"][strtolower($tableName)];
+    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($tableName)];
 
 
-    $this->orderTableStructColumns($refTableStruct["__COLUMNS__"]);
+    $this->orderTableStructColumns($refTableStruct["COLUMNS"]);
     $refColNames = array();
-    foreach ((array)$refTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
+    foreach ((array)$refTableStruct["COLUMNS"] as $columnKey => $columnStruct) {
       $refColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
     }
 
-    $this->orderTableStructColumns($curTableStruct["__COLUMNS__"]);
+    $this->orderTableStructColumns($curTableStruct["COLUMNS"]);
     $curColNames = array();
-    foreach ((array)$curTableStruct["__COLUMNS__"] as $columnKey => $columnStruct) {
+    foreach ((array)$curTableStruct["COLUMNS"] as $columnKey => $columnStruct) {
       $curColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
     }
 
@@ -906,7 +906,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       $nextCurColName = reset($curColNames);
 
       if ($colName != $nextCurColName) {
-        $columnDef = $this->columnDefStmt($curTableStruct["__COLUMNS__"][$colKey], array("afterColumnName" => $afterColumn));
+        $columnDef = $this->columnDefStmt($curTableStruct["COLUMNS"][$colKey], array("afterColumnName" => $afterColumn));
         $colNameQ = $this->quoteName($colName);
         $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colNameQ $columnDef";
         $this->executeStmt($stmt);
@@ -938,21 +938,21 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // first cleanup foreign keys before we remove tables, columns or indices
     // and as sideeffect handle table lettercase
-    foreach ((array)$this->curDbStruct["__TABLES__"] as $curTableKey => $curTableStruct) {
+    foreach ((array)$this->curDbStruct["TABLES"] as $curTableKey => $curTableStruct) {
 
-      $refTableStruct = $this->refDbStruct["__TABLES__"][$curTableKey];
+      $refTableStruct = $this->refDbStruct["TABLES"][$curTableKey];
       if (!$refTableStruct) {
         continue;
       }
 
       // rename lettercase - reload current table structure
       $this->handleTableCase($refTableStruct);
-      $curTableStruct = $this->curDbStruct["__TABLES__"][strtolower($curTableStruct["__TABLE_META__"]["TABLE_NAME"])];
+      $curTableStruct = $this->curDbStruct["TABLES"][strtolower($curTableStruct["TABLE_META"]["TABLE_NAME"])];
 
-      $tableName = $this->quoteName($curTableStruct["__TABLE_META__"]["TABLE_NAME"]);
-      foreach ((array)$curTableStruct["__FOREIGN_KEYS__"] as $fkKey => $fkStruct) {
-        if (!$refTableStruct["__FOREIGN_KEYS__"][$fkKey]) {
-          $fkName = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+      $tableName = $this->quoteName($curTableStruct["TABLE_META"]["TABLE_NAME"]);
+      foreach ((array)$curTableStruct["FOREIGN_KEYS"] as $fkKey => $fkStruct) {
+        if (!$refTableStruct["FOREIGN_KEYS"][$fkKey]) {
+          $fkName = $this->quoteName($fkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"]);
           $stmt = "ALTER TABLE {$tableName} DROP CONSTRAINT {$fkName}";
           $this->executeStmt($stmt);
         }
@@ -961,10 +961,10 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
     // cleanup tables, columns and indices
-    foreach ((array)$this->curDbStruct["__TABLES__"] as $curTableKey => $curTableStruct) {
+    foreach ((array)$this->curDbStruct["TABLES"] as $curTableKey => $curTableStruct) {
 
-      $refTableStruct = $this->refDbStruct["__TABLES__"][$curTableKey];
-      $tableName = $this->quoteName($curTableStruct["__TABLE_META__"]["TABLE_NAME"]);
+      $refTableStruct = $this->refDbStruct["TABLES"][$curTableKey];
+      $tableName = $this->quoteName($curTableStruct["TABLE_META"]["TABLE_NAME"]);
 
       if (!$refTableStruct) {
         $stmt = "DROP TABLE {$tableName}";
@@ -972,16 +972,16 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
       else {
         // cleanup indices
-        foreach ((array)$curTableStruct["__INDICES__"] as $curIndexKey => $curIndexStruct) {
-          if (!$refTableStruct["__INDICES__"][$curIndexKey]) {
-            $indexName = $this->quoteName($curIndexStruct["__INDEX_META__"]["INDEX_NAME"]);
+        foreach ((array)$curTableStruct["INDICES"] as $curIndexKey => $curIndexStruct) {
+          if (!$refTableStruct["INDICES"][$curIndexKey]) {
+            $indexName = $this->quoteName($curIndexStruct["INDEX_META"]["INDEX_NAME"]);
             $stmt = "ALTER TABLE {$tableName} DROP INDEX {$indexName}";
             $this->executeStmt($stmt);
           }
         }
         // cleanup columns
-        foreach ((array)$curTableStruct["__COLUMNS__"] as $curColumnKey => $curColumnStruct) {
-          if (!$refTableStruct["__COLUMNS__"][$curColumnKey]) {
+        foreach ((array)$curTableStruct["COLUMNS"] as $curColumnKey => $curColumnStruct) {
+          if (!$refTableStruct["COLUMNS"][$curColumnKey]) {
             $columnName = $this->quoteName($curColumnStruct["COLUMN_NAME"]);
             $stmt = "ALTER TABLE {$tableName} DROP COLUMN {$columnName}";
             $this->executeStmt($stmt);
@@ -1062,14 +1062,14 @@ class OgerDbStructMysql extends OgerDbStruct {
         if ($singleLine > 1) {
           $nextSingleLine = $singleLine -1;
         }
-        if ($key == "__TABLE_META__" ||
-            $key == "__INDEX_META__" ||
-            $key == "__FOREIGN_KEY_META__") {
+        if ($key == "TABLE_META" ||
+            $key == "INDEX_META" ||
+            $key == "FOREIGN_KEY_META") {
           $nextSingleLine = 1;
         }
-        if ($key == "__COLUMNS__" ||
-            $key == "__INDEX_COLUMNS__" ||
-            $key == "__FOREIGN_KEY_COLUMNS__") {
+        if ($key == "COLUMNS" ||
+            $key == "INDEX_COLUMNS" ||
+            $key == "FOREIGN_KEY_COLUMNS") {
           $nextSingleLine = 2;
         }
         $str .= $prefix2 . var_export($key, true) . " => " . $this->formatDbStructHelper($value, $nextLevel, $nextSingleLine);
@@ -1194,14 +1194,14 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function indexDefStmt($indexStruct) {
 
-    $indexName = " " . $this->quoteName($indexStruct["__INDEX_META__"]["INDEX_NAME"]);
+    $indexName = " " . $this->quoteName($indexStruct["INDEX_META"]["INDEX_NAME"]);
 
     // the primary key has no separate name
-    if ($indexStruct["__INDEX_META__"]["INDEX_KEY_TYPE"] == "PRIMARY") {
+    if ($indexStruct["INDEX_META"]["INDEX_KEY_TYPE"] == "PRIMARY") {
       $indexName = "";
     }
 
-    $indexKeyType = $indexStruct["__INDEX_META__"]["INDEX_KEY_TYPE"];
+    $indexKeyType = $indexStruct["INDEX_META"]["INDEX_KEY_TYPE"];
     if ($indexKeyType) {
       $indexKeyType .= " ";
     }
@@ -1209,9 +1209,9 @@ class OgerDbStructMysql extends OgerDbStruct {
     $stmt .= "{$indexKeyType}KEY{$indexName}";
 
     // force order of columns and extract names
-    $this->orderIndexStructColumns($indexStruct["__INDEX_COLUMNS__"]);
+    $this->orderIndexStructColumns($indexStruct["INDEX_COLUMNS"]);
     $colNames = array();
-    foreach ((array)$indexStruct["__INDEX_COLUMNS__"] as $indexColumnStruct) {
+    foreach ((array)$indexStruct["INDEX_COLUMNS"] as $indexColumnStruct) {
       $colNames[] = $this->quoteName($indexColumnStruct["COLUMN_NAME"]);
     }
 
@@ -1229,22 +1229,22 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function foreignKeyDefStmt($fkStruct) {
 
-    $fkName = $this->quoteName($fkStruct["__FOREIGN_KEY_META__"]["FOREIGN_KEY_NAME"]);
+    $fkName = $this->quoteName($fkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"]);
 
     $stmt = "CONSTRAINT $fkName";
 
     // force order of columns and extract names
     // we assume that the column order in the reference is the same as in the foreign key
-    $this->orderForeignKeyStructColumns($fkStruct["__FOREIGN_KEY_COLUMNS__"]);
+    $this->orderForeignKeyStructColumns($fkStruct["FOREIGN_KEY_COLUMNS"]);
     $colNames = array();
     $colNamesRef = array();
-    foreach ((array)$fkStruct["__FOREIGN_KEY_COLUMNS__"] as $fkColumnStruct) {
+    foreach ((array)$fkStruct["FOREIGN_KEY_COLUMNS"] as $fkColumnStruct) {
       $colNames[] = $this->quoteName($fkColumnStruct["COLUMN_NAME"]);
       $colNamesRef[] = $this->quoteName($fkColumnStruct["REFERENCED_COLUMN_NAME"]);
     }
 
     // put fields and reference to statement
-    $fkMeta = $fkStruct["__FOREIGN_KEY_META__"];
+    $fkMeta = $fkStruct["FOREIGN_KEY_META"];
     $stmt .= " FOREIGN KEY (" . implode(", ", $colNames) . ")";
     $refTable = $this->quoteName($fkMeta["REFERENCED_TABLE_NAME"]);
     $stmt .= " REFERENCES $refTable (" . implode(", ", $colNamesRef) . ")" .

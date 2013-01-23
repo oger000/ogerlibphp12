@@ -86,14 +86,14 @@ abstract class OgerDbStruct {
     $startTime = time();
 
     $struct = array();
-    $struct["__DBSTRUCT_META__"] = array(
+    $struct["DBSTRUCT_META"] = array(
       "DRIVER_NAME" => $this->driverName,
       "SERIAL" => $startTime,
       "TIME" => date("c", $startTime),
     );
 
-    $struct["__SCHEMA_META__"] = array();
-    $struct["__TABLES__"] = array();
+    $struct["SCHEMA_META"] = array();
+    $struct["TABLES"] = array();
 
     return $struct;
   }  // eo create struct head
@@ -227,6 +227,9 @@ abstract class OgerDbStruct {
   * @param $text Text added to the log buffer.
   */
   public function addLog($text) {
+    if ($this->getParam("dry-run")) {
+      $text = "-- dry-run: " . $text;
+    }
     $this->log .= $text;
   }  // eo add log
 
