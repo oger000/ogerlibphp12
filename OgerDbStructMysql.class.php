@@ -450,7 +450,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function addDbStruct($refDbStruct = null, $opts = array()) {
 
-    $this->log(static::LOG_NOTICE, "-- *** Enter " . __METHOD__ . ".\n");
+    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
     $this->preProcessCheck($refDbStruct);
 
@@ -643,7 +643,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function refreshDbStruct($refDbStruct = null) {
 
-    $this->log(static::LOG_NOTICE, "-- *** Enter " . __METHOD__ . ".\n");
+    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
     $this->preProcessCheck($refDbStruct);
 
@@ -810,7 +810,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function updateDbStruct($refDbStruct, $opts = array()) {
 
-    $this->log(static::LOG_NOTICE, "-- *** Enter " . __METHOD__ . ".\n");
+    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
     $this->preProcessCheck($refDbStruct);
 
@@ -835,7 +835,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function reorderDbStruct($refDbStruct) {
 
-    $this->log(static::LOG_NOTICE, "-- *** Enter " . __METHOD__ . ".\n");
+    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
     $this->preProcessCheck($refDbStruct);
 
@@ -932,7 +932,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function cleanupDbStruct($refDbStruct) {
 
-    $this->log(static::LOG_NOTICE, "-- *** Enter " . __METHOD__ . ".\n");
+    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
     $this->preProcessCheck();
 
@@ -1011,7 +1011,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function forceDbStruct($refDbStruct) {
 
-    $this->log(static::LOG_NOTICE, "-- *** Enter " . __METHOD__ . ".\n");
+    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
     $this->preProcessCheck($refDbStruct);
 
@@ -1097,6 +1097,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function startReverseMode ($refDbStruct) {
 
+    // call guard
     if ($this->reverseMode) {
       throw new Exception("Already in reverse mode.");
     }
@@ -1106,9 +1107,9 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->initialRefDbStruct = $refDbStruct;
     $this->curDbStruct = $refDbStruct;
 
-    $this->reverseMode = true;
     $this->setParam("dry-run", true);
 
+    $this->reverseMode = true;
   }  // eo start reverse  mode
 
 

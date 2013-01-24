@@ -20,6 +20,7 @@ abstract class OgerDbStruct {
   const LOG_LOG = 1;
   const LOG_DEBUG = 5;
   const LOG_NOTICE = 7;
+  const LOG_ULTRADEBUG = 99;
 
   protected $conn;  ///< PDO instance created elsewhere.
   protected $dbName;  ///< Database name.
@@ -31,6 +32,7 @@ abstract class OgerDbStruct {
   protected $quoteNamBegin = '"';
   protected $quoteNamEnd = '"';
 
+  public $updateCounter = 0;
 
   /**
    * Construct with a PDO instance and database name.
@@ -191,6 +193,19 @@ abstract class OgerDbStruct {
   }  // eo set param
 
   /**
+  * Set multiple parameters at once.
+  * @params Associative array with key value pairs.
+  * @return Old parameter values.
+  */
+  public function setParams($values) {
+    $ret = array();
+    foreach ($values as $key => $value) {
+      $ret[$key] = $this->setParam($key, $value);
+    }
+    return $ret;
+  }  // eo set param
+
+  /**
   * Get parameter.
   * @param $name Parameter name.
   * @return Old parameter value.
@@ -215,6 +230,9 @@ abstract class OgerDbStruct {
   */
   public function log($msgLogLevel, $text) {
     if ($msgLogLevel <= $this->getParam("log-level")) {
+      if ($this->getParam("dry-run")) {
+        $text = "-- dry-run: " . $text;
+      }
       if ($this->getParam("echo-log")) {
         echo $text;
       }
@@ -227,9 +245,6 @@ abstract class OgerDbStruct {
   * @param $text Text added to the log buffer.
   */
   public function addLog($text) {
-    if ($this->getParam("dry-run")) {
-      $text = "-- dry-run: " . $text;
-    }
     $this->log .= $text;
   }  // eo add log
 
@@ -272,6 +287,7 @@ abstract class OgerDbStruct {
     foreach ($stmts as $stmt) {
       if ($stmt) {
         $this->log(static::LOG_DEBUG, "$stmt;\n");
+        $this->updateCounter++;
         if (!$this->getParam("dry-run")) {
           $pstmt = $this->conn->prepare($stmt);
           $pstmt->execute();
