@@ -421,7 +421,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       $refTableNameQ = $this->quoteName($refTableName);
       $curTableNameQ = $this->quoteName($curTableName);
       $stmt = "RENAME TABLE {$curTableNameQ} TO {$refTableNameQ}";
-      $this->executeStmt($stmt);
+      $this->execChange($stmt);
 
       // do not reload on dry-run because we did not rename
       if ($reload) {
@@ -538,7 +538,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
     // execute the statement
-    $this->executeStmt($stmt);
+    $this->execChange($stmt);
   }  // eo add table
 
 
@@ -607,7 +607,7 @@ class OgerDbStructMysql extends OgerDbStruct {
             " ADD COLUMN " .
             $this->columnDefStmt($columnStruct, $opts);
 
-    $this->executeStmt($stmt);
+    $this->execChange($stmt);
   }  // eo add column to table
 
 
@@ -618,7 +618,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   public function addTableIndex($indexStruct) {
     $tableName = $this->quoteName($indexStruct["INDEX_META"]["TABLE_NAME"]);
     $stmt = "ALTER TABLE $tableName ADD " . $this->indexDefStmt($indexStruct, $opts);
-    $this->executeStmt($stmt);
+    $this->execChange($stmt);
   }  // eo add index
 
 
@@ -629,7 +629,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   public function addTableForeignKey($fkStruct) {
     $tableName = $this->quoteName($fkStruct["FOREIGN_KEY_META"]["TABLE_NAME"]);
     $stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct, $opts);
-    $this->executeStmt($stmt);
+    $this->execChange($stmt);
   }  // eo add foreign key
 
 
@@ -688,7 +688,7 @@ class OgerDbStructMysql extends OgerDbStruct {
                " ENGINE=" . $refTableMeta["ENGINE"] .
                " DEFAULT" .
                " COLLATE=" . $refTableMeta["TABLE_COLLATION"];
-      $this->executeStmt($stmt);
+      $this->execChange($stmt);
     }  // eo table meta
 
 
@@ -739,7 +739,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
       // TODO: include AFTER | FIRST position here?
       $stmt = "ALTER TABLE {$tableName} CHANGE COLUMN $curColumnName $refColumnSql";
-      $this->executeStmt($stmt);
+      $this->execChange($stmt);
     }  // eo something changed
   }  // eo update column
 
@@ -766,7 +766,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
       $stmt = "ALTER TABLE $tableName DROP INDEX $curIndexName;" .
               "ALTER TABLE $tableName ADD $refIndexSql";
-      $this->executeStmt($stmt);
+      $this->execChange($stmt);
     }  // eo something changed
   }  // eo update index
 
@@ -793,7 +793,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
       $stmt = "ALTER TABLE $tableName DROP FOREIGN KEY $curFkName;" .
               "ALTER TABLE $tableName ADD $refFkSql";
-      $this->executeStmt($stmt);
+      $this->execChange($stmt);
     }  // eo something changed
   }  // eo update foreign key
 
@@ -909,7 +909,7 @@ class OgerDbStructMysql extends OgerDbStruct {
         $columnDef = $this->columnDefStmt($curTableStruct["COLUMNS"][$colKey], array("afterColumnName" => $afterColumn));
         $colNameQ = $this->quoteName($colName);
         $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colNameQ $columnDef";
-        $this->executeStmt($stmt);
+        $this->execChange($stmt);
       }
 
       $afterColumn = $colName;
@@ -954,7 +954,7 @@ class OgerDbStructMysql extends OgerDbStruct {
         if (!$refTableStruct["FOREIGN_KEYS"][$fkKey]) {
           $fkName = $this->quoteName($fkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"]);
           $stmt = "ALTER TABLE {$tableName} DROP CONSTRAINT {$fkName}";
-          $this->executeStmt($stmt);
+          $this->execChange($stmt);
         }
       }
     }  // table loop for foreign keys
@@ -968,7 +968,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
       if (!$refTableStruct) {
         $stmt = "DROP TABLE {$tableName}";
-        $this->executeStmt($stmt);
+        $this->execChange($stmt);
       }
       else {
         // cleanup indices
@@ -976,7 +976,7 @@ class OgerDbStructMysql extends OgerDbStruct {
           if (!$refTableStruct["INDICES"][$curIndexKey]) {
             $indexName = $this->quoteName($curIndexStruct["INDEX_META"]["INDEX_NAME"]);
             $stmt = "ALTER TABLE {$tableName} DROP INDEX {$indexName}";
-            $this->executeStmt($stmt);
+            $this->execChange($stmt);
           }
         }
         // cleanup columns
@@ -984,7 +984,7 @@ class OgerDbStructMysql extends OgerDbStruct {
           if (!$refTableStruct["COLUMNS"][$curColumnKey]) {
             $columnName = $this->quoteName($curColumnStruct["COLUMN_NAME"]);
             $stmt = "ALTER TABLE {$tableName} DROP COLUMN {$columnName}";
-            $this->executeStmt($stmt);
+            $this->execChange($stmt);
           }
         }
       }  // eo existing table
@@ -1116,10 +1116,10 @@ class OgerDbStructMysql extends OgerDbStruct {
 
   /**
   * Prepares and executes an sql statement.
-  * @see OgerDbStruct::executeStmt().
+  * @see OgerDbStruct::execChange().
   */
-  public function executeStmt($stmt, $values = array()) {
-    parent::executeStmt($stmt, $values);
+  public function execChange($stmt, $values = array()) {
+    parent::execChange($stmt, $values);
     if (!$this->getParam("dry-run")) {
       $this->curDiffCounter++;
     }

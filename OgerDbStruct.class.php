@@ -32,7 +32,7 @@ abstract class OgerDbStruct {
   protected $quoteNamBegin = '"';
   protected $quoteNamEnd = '"';
 
-  public $updateCounter = 0;
+  public $changeCounter = 0;
 
   /**
    * Construct with a PDO instance and database name.
@@ -282,12 +282,12 @@ abstract class OgerDbStruct {
   * @param $stmt SQL statement.
   * @param $values Associative array with parameter => value pairs.
   */
-  public function executeStmt($stmt, $values = array()) {
+  public function execChange($stmt, $values = array()) {
     $stmts = explode(";", $stmt);
     foreach ($stmts as $stmt) {
       if ($stmt) {
         $this->log(static::LOG_DEBUG, "$stmt;\n");
-        $this->updateCounter++;
+        $this->changeCounter++;
         if (!$this->getParam("dry-run")) {
           $pstmt = $this->conn->prepare($stmt);
           $pstmt->execute();
