@@ -17,7 +17,9 @@
 */
 abstract class OgerDbStruct {
 
-  const LOG_LOG = 1;
+  const LOG_NONE = 0;
+  const LOG_CMD = 1;
+  const LOG_LOG = 2;
   const LOG_DEBUG = 5;
   const LOG_NOTICE = 7;
   const LOG_ULTRADEBUG = 99;
@@ -286,7 +288,7 @@ abstract class OgerDbStruct {
     $stmts = explode(";", $stmt);
     foreach ($stmts as $stmt) {
       if ($stmt) {
-        $this->log(static::LOG_DEBUG, "$stmt;\n");
+        $this->log(static::LOG_CMD, "$stmt;\n");
         $this->changeCounter++;
         if (!$this->getParam("dry-run")) {
           $pstmt = $this->conn->prepare($stmt);
