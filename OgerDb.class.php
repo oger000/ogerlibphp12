@@ -12,9 +12,6 @@
 */
 class OgerDb {
 
-  const SQL_INSERT = 'INSERT';  ///< INSERT marker for sql statement.
-  const SQL_UPDATE = 'UPDATE';  ///< UPDATE marker for sql statement.
-
   /// Escape char at the begin.
   /// Escape char at the begin of table and column names to encapsulate reserved words.
   /// Defaults to double quotes (") which is the ANSI SQL Standard .
@@ -37,14 +34,14 @@ class OgerDb {
   public static function sqlStmt($action, $tableName, $fields, $where = "") {
 
     switch ($action) {
-    case self::ACTION_INSERT:
+    case "INSERT":
       foreach ($fields as $field) {
         $fieldStmt .= ($fieldStmt ? "," : '') . "{static::$escNamBegin}$field{static::$escNamEnd}";
         $valueStmt .= ($valueStmt ? "," : '') . ":$field";
       }
       $stmt .= "INSERT INTO {static::$escNamBegin}$tableName{static::$escNamEnd} ($fieldStmt) VALUES ($valueStmt)";
       break;
-    case self::ACTION_UPDATE:
+    case "UPDATE":
       foreach ($fields as $field) {
         $stmtSet .= ($stmtSet ? "," : '') . "{static::$escNamBegin}$field{static::$escNamEnd}=:$field";
       }
