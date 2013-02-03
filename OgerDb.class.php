@@ -116,10 +116,10 @@ class OgerDb {
 
 
   /**
-  * Prepared statement with optional where parameter.
+  * Prepared statement with optional where parameters.
   * @return The prepared statement.
   */
-  public static function prepSelect($stmt, $where = array(), $moreStmt = "") {
+  public static function prepStmt($stmt, $where = array(), $moreStmt = "") {
     $stmt .= static::whereStmt($where);
     if ($moreStmt) {
       $stmt .= " $moreStmt";
@@ -131,11 +131,11 @@ class OgerDb {
 
   /**
   * Execute a statement with optional parameters.
-  * For parameters @see prepSelect().
+  * For parameters @see prepStmt().
   * @return The prepared statement.
   */
-  public static function execSelect($stmt, $where = array(), $moreStmt = "") {
-    $pstmt = static::prepSelect($stmt, $where, $moreStmt);
+  public static function execStmt($stmt, $where = array(), $moreStmt = "") {
+    $pstmt = static::prepStmt($stmt, $where, $moreStmt);
     $pstmt->execute($where);
     return $pstmt;
   }  // oe make, prepare and execute statement
@@ -144,11 +144,11 @@ class OgerDb {
   /**
   * Execute a statement with optional parameters and fetch first entry.
   * Close the prepared statement after fetching.
-  * For parameters @see prepSelect().
+  * For parameters @see prepStmt().
   * @return The first result entry.
   */
-  public static function fetchSelect($stmt, $where = array(), $moreStmt = "") {
-    $pstmt = static::execSelect($stmt, $where, $moreStmt);
+  public static function fetchStmt($stmt, $where = array(), $moreStmt = "") {
+    $pstmt = static::execStmt($stmt, $where, $moreStmt);
     $pstmt->execute($where);
     $row = $pstmt->fetch(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
