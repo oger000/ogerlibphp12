@@ -16,22 +16,32 @@ class OgerDb {
   /// Escape char at the begin of table and column names to encapsulate reserved words.
   /// Defaults to double quotes (") which is the ANSI SQL Standard .
   static $escNamBegin = '"';
+
   /// Escape char at the end.
   /// Escape char at the end of table and column names to encapsulate reserved words.
   /// Defaults to double quotes (") which is the ANSI SQL Standard .
   static $escNamEnd = '"';
 
+  /// The PDO connection.
+  /// It is the responsibility of the class user to provide a valid PDO connection
+  /// before using it.
+  static $conn;
+
 
   /**
-  * Create a SQL string for insert or update.
+  * Create a SQL string for insert or update for pepared statement.
   * @param $action Sql action (INSERT or UPDATE).
   * @param $tableName  Table name.
-  * @param $fields Array with field names.
+  * @param $fields Array with field names or associative array with fieldname => value pairs.
   * @param string|array $where  Optional SQL WHERE clause.
   *                String or array without the WHERE keyword. An array is passed to whereStmt().
   * @return String with created sql command.
   */
-  public static function sqlStmt($action, $tableName, $fields, $where = "") {
+  public static function makeStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
+
+    if (Oger::isAssocArray($fields)) {
+      $fields = array_keys($fields);
+    }
 
     switch ($action) {
     case "INSERT":
@@ -51,16 +61,99 @@ class OgerDb {
       throw new Exception("Unknown " . __CLASS__ . "::action: $action.");
     }
 
-    if (is_array($where)) {
-      $where = static::whereStmt($where);
-    }
-    if ($where) {
-      $stmt .= " WHERE $where";
+    $stmt .= static::whereStmt($where);
+
+    if ($moreStmt) {
+      $stmt .= " $moreStmt";
     }
 
     return $stmt;
   } // end of create statement
 
+
+  /**
+  * Create a prepared statement from given parameters.
+  * For parameters @see makeStmt().
+  * @deprecated Do not use.
+  * @return The prepared statement.
+  */
+  public static function prepXStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
+    $sql = static::makeStmt($action, $tableName, $fields, $where, $moreStmt);
+    $pstmt = static::$conn->prepare($sql);
+    return $pstmt;
+  }  // eo mke and prepare statement
+
+
+  /**
+  * Execute a prepared statement from given parameters.
+  * For parameters @see makeStmt().
+  * @deprecated Do not use.
+  * @param $fields  Has to be an associative array of field name => value pairs and
+  *                 must also include the keys and values for the WHERE clause.
+  * @return The prepared statement.
+  */
+  public static function execXStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
+    $pstmt = static::prepXStmt($action, $tableName, $fields, $where, $moreStmt);
+    $pstmt->execute($fields);
+    return $pstmt;
+  }  // oe make, prepare and execute statement
+
+
+  /**
+  * Execute a prepared statement from given parameters and fetch first entry.
+  * Close the prepared statement after fetching.
+  * For parameters @see execXStmt().
+  * @deprecated Do not use.
+  * @return The result.
+  */
+  public static function fetchXStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
+    $pstmt = static::execXStmt($action, $tableName, $fields, $where, $moreStmt);
+    $pstmt->execute($fields);
+    $row = $pstmt->fetch(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+    return $row;
+  }  // oe make, prepare, execute, fetch
+
+
+  /**
+  * Prepared statement with optional where parameter.
+  * @return The prepared statement.
+  */
+  public static function prepSelect($stmt, $where = array(), $moreStmt = "") {
+    $stmt .= static::whereStmt($where);
+    if ($moreStmt) {
+      $stmt .= " $moreStmt";
+    }
+    $pstmt = static::$conn->prepare($sql);
+    return $pstmt;
+  }  // eo mke and prepare statement
+
+
+  /**
+  * Execute a statement with optional parameters.
+  * For parameters @see prepSelect().
+  * @return The prepared statement.
+  */
+  public static function execSelect($stmt, $where = array(), $moreStmt = "") {
+    $pstmt = static::prepSelect($stmt, $where, $moreStmt);
+    $pstmt->execute($where);
+    return $pstmt;
+  }  // oe make, prepare and execute statement
+
+
+  /**
+  * Execute a statement with optional parameters and fetch first entry.
+  * Close the prepared statement after fetching.
+  * For parameters @see prepSelect().
+  * @return The first result entry.
+  */
+  public static function fetchSelect($stmt, $where = array(), $moreStmt = "") {
+    $pstmt = static::execSelect($stmt, $where, $moreStmt);
+    $pstmt->execute($where);
+    $row = $pstmt->fetch(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+    return $row;
+  }  // oe make, prepare, execute, fetch
 
 
   /**
@@ -122,6 +215,21 @@ class OgerDb {
 
   /**
   * Creates a SQL WHERE clause designed for a prepared statement.
+  * For parameters @see wherePart().
+  * @return String with WHERE clause with the leading WHERE keyword.
+  */
+  public static function whereStmt($params, $glueOp = "AND") {
+    $where = static::wherePart($params, $glueOp);
+    if (trim($where)) {
+      $where = " WHERE $where";
+    }
+    return $where;
+  }
+
+
+
+  /**
+  * Creates a part for the SQL WHERE clause designed for a prepared statement.
   * The WHERE clause containing placeholder for named parameters.<BR>
   * Remark on prepared statements (PHP 5.3):
   * Looks like repared statements are always filled in as strings, even
@@ -134,13 +242,17 @@ class OgerDb {
   *                 Currently only the "=" comperator is used.
   * @param string $glueOp  Optional logical operator that glues together the fields.
   *                 Defaults to "AND".
-  * @return String with WHERE clause without the WHERE keyword.
+  * @return String with WHERE clause, but without the leading WHERE keyword.
   */
-  public static function whereStmt($params, $glueOp = "AND") {
+  public static function wherePart($params, $glueOp = "AND") {
+
+    if (!is_array($params)) {
+      return $params;
+    }
 
     $stmt = '';
 
-    // if not an associative array use values as key (parameter name)
+    // if not an associative array use values as keys (parameter name)
     if (!Oger::isAssocArray($params)) {
       $params = array_flip($params);
     }

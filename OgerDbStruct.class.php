@@ -34,7 +34,7 @@ abstract class OgerDbStruct {
   protected $quoteNamBegin = '"';
   protected $quoteNamEnd = '"';
 
-  public $changeCounter = 0;
+  public $changeCount = 0;
 
   /**
    * Construct with a PDO instance and database name.
@@ -289,7 +289,7 @@ abstract class OgerDbStruct {
     foreach ($stmts as $stmt) {
       if ($stmt) {
         $this->log(static::LOG_CMD, "$stmt;\n");
-        $this->changeCounter++;
+        $this->changeCount++;
         if (!$this->getParam("dry-run")) {
           $pstmt = $this->conn->prepare($stmt);
           $pstmt->execute();

@@ -39,7 +39,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   private $reverseMode;
   private $initialRefDbStruct;
 
-  private $curDiffCounter = 0;
+  private $curDiffCount = 0;
 
 
   /**
@@ -71,7 +71,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   public function getDbStruct($opts = array()) {
 
     // reset internal diff counter
-    $this->curDiffCounter = 0;
+    $this->curDiffCount = 0;
 
     // in reverse mode return the initial reference structure
     if ($this->reverseMode) {
@@ -475,7 +475,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo include foreign keys
 
     // invalide the current database struct array because we did not update internally
-    if ($this->curDiffCounter > 0) {
+    if ($this->curDiffCount > 0) {
       $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
       $this->curDbStruct = null;
     }
@@ -656,7 +656,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo table loop
 
     // invalide the current database struct array because we did not update internally
-    if ($this->curDiffCounter > 0) {
+    if ($this->curDiffCount > 0) {
       $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
       $this->curDbStruct = null;
     }
@@ -847,7 +847,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo table loop
 
     // invalide the current database struct array because we did not update internally
-    if ($this->curDiffCounter > 0) {
+    if ($this->curDiffCount > 0) {
       $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
       $this->curDbStruct = null;
     }
@@ -991,7 +991,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }  // eo table loop
 
     // invalide the current database struct array because we did not update internally
-    if ($this->curDiffCounter > 0) {
+    if ($this->curDiffCount > 0) {
       $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
       $this->curDbStruct = null;
     }
@@ -1121,7 +1121,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   public function execChange($stmt, $values = array()) {
     parent::execChange($stmt, $values);
     if (!$this->getParam("dry-run")) {
-      $this->curDiffCounter++;
+      $this->curDiffCount++;
     }
   }  // eo execute stmt
 
