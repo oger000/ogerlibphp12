@@ -49,6 +49,7 @@ class OgerDb {
       $fields = array_keys($fields);
     }
 
+    $action = strtoupper($action);
     switch ($action) {
     case "INSERT":
       foreach ($fields as $field) {
@@ -62,12 +63,12 @@ class OgerDb {
         $stmtSet .= ($stmtSet ? "," : '') . static::$encName($field) . "=:$field";
       }
       $stmt .= "UPDATE " . static::$encName($tableName) . " SET $stmtSet";
+      // only update needs where values
+      $stmt .= static::whereStmt($where);
       break;
     default:
       throw new Exception("Unknown " . __CLASS__ . "::action: $action.");
     }
-
-    $stmt .= static::whereStmt($where);
 
     if ($moreStmt) {
       $stmt .= " $moreStmt";
