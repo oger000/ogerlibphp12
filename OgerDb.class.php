@@ -12,20 +12,26 @@
 */
 class OgerDb {
 
-  /// Escape char at the begin.
-  /// Escape char at the begin of table and column names to encapsulate reserved words.
+  /// Enclose char at the begin.
+  /// Enclose char at the begin of table and column names to encapsulate reserved words.
   /// Defaults to double quotes (") which is the ANSI SQL Standard .
-  static $escNamBegin = '"';
+  static $encNamBegin = '"';
 
-  /// Escape char at the end.
-  /// Escape char at the end of table and column names to encapsulate reserved words.
+  /// Enclose char at the end.
+  /// Enclose char at the end of table and column names to encapsulate reserved words.
   /// Defaults to double quotes (") which is the ANSI SQL Standard .
-  static $escNamEnd = '"';
+  static $encNamEnd = '"';
 
-  /// The PDO connection.
-  /// It is the responsibility of the class user to provide a valid PDO connection
-  /// before using it.
-  static $conn;
+
+
+  /**
+  * Enclose a name with database dependend encape chars.
+  * @param $name Name to enclose.
+  * @return Enclosed name.
+  */
+  public static function encName($name) {
+    return static::$encNamBegin . $name . static::$encNamEnd;
+  }
 
 
   /**
@@ -37,7 +43,7 @@ class OgerDb {
   *                String or array without the WHERE keyword. An array is passed to whereStmt().
   * @return String with created sql command.
   */
-  public static function makeStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
+  public static function getStoreStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
 
     if (Oger::isAssocArray($fields)) {
       $fields = array_keys($fields);
@@ -46,16 +52,16 @@ class OgerDb {
     switch ($action) {
     case "INSERT":
       foreach ($fields as $field) {
-        $fieldStmt .= ($fieldStmt ? "," : '') . "{static::$escNamBegin}$field{static::$escNamEnd}";
+        $fieldStmt .= ($fieldStmt ? "," : '') . static::encName($field);
         $valueStmt .= ($valueStmt ? "," : '') . ":$field";
       }
-      $stmt .= "INSERT INTO {static::$escNamBegin}$tableName{static::$escNamEnd} ($fieldStmt) VALUES ($valueStmt)";
+      $stmt .= "INSERT INTO " . static::$encName($tableName) . " ($fieldStmt) VALUES ($valueStmt)";
       break;
     case "UPDATE":
       foreach ($fields as $field) {
-        $stmtSet .= ($stmtSet ? "," : '') . "{static::$escNamBegin}$field{static::$escNamEnd}=:$field";
+        $stmtSet .= ($stmtSet ? "," : '') . static::$encName($field) . "=:$field";
       }
-      $stmt .= "UPDATE {static::$escNamBegin}$tableName{static::$escNamEnd} SET $stmtSet";
+      $stmt .= "UPDATE " . static::$encName($tableName) . " SET $stmtSet";
       break;
     default:
       throw new Exception("Unknown " . __CLASS__ . "::action: $action.");
@@ -70,90 +76,6 @@ class OgerDb {
     return $stmt;
   } // end of create statement
 
-
-  /**
-  * Create a prepared statement from given parameters.
-  * For parameters @see makeStmt().
-  * @deprecated Do not use.
-  * @return The prepared statement.
-  */
-  public static function prepXStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
-    $sql = static::makeStmt($action, $tableName, $fields, $where, $moreStmt);
-    $pstmt = static::$conn->prepare($sql);
-    return $pstmt;
-  }  // eo mke and prepare statement
-
-
-  /**
-  * Execute a prepared statement from given parameters.
-  * For parameters @see makeStmt().
-  * @deprecated Do not use.
-  * @param $fields  Has to be an associative array of field name => value pairs and
-  *                 must also include the keys and values for the WHERE clause.
-  * @return The prepared statement.
-  */
-  public static function execXStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
-    $pstmt = static::prepXStmt($action, $tableName, $fields, $where, $moreStmt);
-    $pstmt->execute($fields);
-    return $pstmt;
-  }  // oe make, prepare and execute statement
-
-
-  /**
-  * Execute a prepared statement from given parameters and fetch first entry.
-  * Close the prepared statement after fetching.
-  * For parameters @see execXStmt().
-  * @deprecated Do not use.
-  * @return The result.
-  */
-  public static function fetchXStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
-    $pstmt = static::execXStmt($action, $tableName, $fields, $where, $moreStmt);
-    $pstmt->execute($fields);
-    $row = $pstmt->fetch(PDO::FETCH_ASSOC);
-    $pstmt->closeCursor();
-    return $row;
-  }  // oe make, prepare, execute, fetch
-
-
-  /**
-  * Prepared statement with optional where parameters.
-  * @return The prepared statement.
-  */
-  public static function prepStmt($stmt, $where = array(), $moreStmt = "") {
-    $stmt .= static::whereStmt($where);
-    if ($moreStmt) {
-      $stmt .= " $moreStmt";
-    }
-    $pstmt = static::$conn->prepare($sql);
-    return $pstmt;
-  }  // eo mke and prepare statement
-
-
-  /**
-  * Execute a statement with optional parameters.
-  * For parameters @see prepStmt().
-  * @return The prepared statement.
-  */
-  public static function execStmt($stmt, $where = array(), $moreStmt = "") {
-    $pstmt = static::prepStmt($stmt, $where, $moreStmt);
-    $pstmt->execute($where);
-    return $pstmt;
-  }  // oe make, prepare and execute statement
-
-
-  /**
-  * Execute a statement with optional parameters and fetch first entry.
-  * Close the prepared statement after fetching.
-  * For parameters @see prepStmt().
-  * @return The first result entry.
-  */
-  public static function fetchStmt($stmt, $where = array(), $moreStmt = "") {
-    $pstmt = static::execStmt($stmt, $where, $moreStmt);
-    $pstmt->execute($where);
-    $row = $pstmt->fetch(PDO::FETCH_ASSOC);
-    $pstmt->closeCursor();
-    return $row;
-  }  // oe make, prepare, execute, fetch
 
 
   /**
@@ -214,7 +136,7 @@ class OgerDb {
 
 
   /**
-  * Creates a SQL WHERE clause designed for a prepared statement.
+  * Creates a simple SQL WHERE clause designed for a prepared statement.
   * For parameters @see wherePart().
   * @return String with WHERE clause with the leading WHERE keyword.
   */
@@ -225,8 +147,6 @@ class OgerDb {
     }
     return $where;
   }
-
-
 
   /**
   * Creates a part for the SQL WHERE clause designed for a prepared statement.
@@ -252,70 +172,25 @@ class OgerDb {
 
     $stmt = '';
 
-    // if not an associative array use values as keys (parameter name)
-    if (!Oger::isAssocArray($params)) {
-      $params = array_flip($params);
+    // if  an associative array use keys as parameter name
+    if (Oger::isAssocArray($params)) {
+      $params = array_keys($params);
     }
 
     // create where clause
-    foreach ($params as $paramName => $value) {
-
-      $glueOpTmp = $glueOp;
-      $fieldName = $value;
-      $fieldCast = "";
-      $compOp = "=";
-      $valueCast = "";
-
-      // evaluate extended syntax (NOT DOCUMENTED !!!)
-      if (is_array($value)) {
-        $glueOpTmp = ($value['glueOp'] ?: $glueOp);
-        $fieldName = ($value['field'] ?: $fieldName);
-        $fieldCast = ($value['fieldCast'] ?: $fieldCast);
-        $compOp = ($value['compOp'] ?: $compOp);
-        $valueCast = ($value['valueCast'] ?: $valueCast);
-      }
-
-      $fieldName = "{static::$escNamBegin}$fieldName{static::$escNamEnd}";
-      if ($fieldCast) {
-        $fieldName = "CAST($fieldName AS $fieldCast)";
-      }
-
-      $paramName = ":$paramName";
-      if ($valueCast) {
-        $paramName = "CAST($paramName AS $valueCast)";
-      }
-
-      $stmt .= ($stmt ? " $glueOpTmp " : "") . " $compOp $paramName";
+    foreach ($params as $paramName) {
+      $stmt .= ($stmt ? " $glueOp " : "") . static::encName(paramName) . "=:$paramName";
     }
 
     return $stmt;
   } // end of create where
 
 
-  /**
-  * Clean up an array with WHERE parameters for usage in execute().
-  * An array with WHERE parameters can contain additional information
-  * beside the value. So we have to cleanup before being used in execute().
-  * @param $params  An assoziative array with parameter names as key
-  *        and WHERE information as value.
-  * @return Array with WHERE information reduced to the plain value.
-  */
-  public static function getCleanWhereVals($values) {
-
-    $whereVals = array();
-
-    // the value can contain additional information that is cleared now
-    foreach ((array)$values as $key => $value) {
-      if (is_array($value)) {
-        $value = $value['value'];
-      }
-      $whereVals[$key] = $value;
-    }
-
-    return $whereVals;
-  } // end of clean where vals
-
 
 }  // eo class
+
+
+
+
 
 ?>
