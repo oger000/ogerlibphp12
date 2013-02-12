@@ -734,8 +734,8 @@ class OgerDbStructMysql extends OgerDbStruct {
       $tableName = $this->quoteName($curColumnStruct["TABLE_NAME"]);
       $curColumnName = $this->quoteName($curColumnStruct["COLUMN_NAME"]);
 
-      $this->log(static::LOG_NOTICE, "-- Old: $curColumnSql\n" .
-                                     "-- New: $refColumnSql\n");
+      $this->log(static::LOG_NOTICE, "-- Old: $curColumnSql\n");
+      $this->log(static::LOG_NOTICE, "-- New: $refColumnSql\n");
 
       // TODO: include AFTER | FIRST position here?
       $stmt = "ALTER TABLE {$tableName} CHANGE COLUMN $curColumnName $refColumnSql";
@@ -808,7 +808,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Update existing tables, columns, indices or foreign keys and add missing one.
   * @see OgerDbStruct::updateDbStruct().
   */
-  public function updateDbStruct($refDbStruct, $opts = array()) {
+  public function updateDbStruct($refDbStruct = null, $opts = array()) {
 
     $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
@@ -833,7 +833,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Tables do not have a specific order inside the database.
   * @see OgerDbStruct::reorderDbStruct().
   */
-  public function reorderDbStruct($refDbStruct) {
+  public function reorderDbStruct($refDbStruct = null) {
 
     $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
@@ -930,7 +930,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Cleanup surpluss tables, columns, indices and foreign keys.
   * @see OgerDbStruct::cleanupDbStruct().
   */
-  public function cleanupDbStruct($refDbStruct) {
+  public function cleanupDbStruct($refDbStruct = null) {
 
     $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
@@ -1009,7 +1009,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Force database structure.
   * @see OgerDbStruct::forceDbStruct().
   */
-  public function forceDbStruct($refDbStruct) {
+  public function forceDbStruct($refDbStruct = null) {
 
     $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
