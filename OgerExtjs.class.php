@@ -14,9 +14,9 @@ class OgerExtjs {
   /**
   * Encode an object from a php array into json.
   * @param $obj The array with the object values.
-  * @param $success Boolean flag for the success property. Defaults to true.
-  *        Null supresses the setting if the object already has a success property.
-  *        If no success property is present then it is set to true.
+  * @param $success Boolean flag for the success property. Defaults to true.<br>
+  *        - Null supresses the setting if the object already has a success property.
+  *          If no success property is present then it is set to true.<br>
   * @return Json encoded object.
   */
   public static function enc($obj = array(), $success = true) {
