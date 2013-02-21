@@ -67,7 +67,7 @@ class OgerDb {
       $stmt .= static::whereStmt($where);
       break;
     default:
-      throw new Exception("Unknown " . __CLASS__ . "::action: $action.");
+      throw new Exception("Unknown database store action: $action.");
     }
 
     if ($moreStmt) {
