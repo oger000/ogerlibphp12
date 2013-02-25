@@ -126,14 +126,14 @@ abstract class OgerDbStruct {
   * Update existing tables, columns, indices or foreign keys and add missing one.
   * @param $refDbStruct Array with the reference database structure.
   */
-  abstract public function updateDbStruct($refDbStruct);
+  abstract public function updateDbStruct($refDbStruct = null);
 
 
   /**
   * Reorder database structure.
   * @param $refDbStruct Array with the reference database structure.
   */
-  abstract public function reorderDbStruct($refDbStruct);
+  abstract public function reorderDbStruct($refDbStruct = null);
 
 
   /**
@@ -142,7 +142,7 @@ abstract class OgerDbStruct {
   * but everything that is above is removed.
   * @param $refDbStruct Array with the reference database structure.
   */
-  abstract public function cleanupDbStruct($refDbStruct);
+  abstract public function cleanupDbStruct($refDbStruct = null);
 
 
   /**
@@ -150,7 +150,7 @@ abstract class OgerDbStruct {
   * Forces the given database structure by adding, refreshing, reordering and deleting divergent structure.
   * @param $refDbStruct Array with the reference database structure.
   */
-  abstract public function forceDbStruct($refDbStruct);
+  abstract public function forceDbStruct($refDbStruct = null);
 
 
 

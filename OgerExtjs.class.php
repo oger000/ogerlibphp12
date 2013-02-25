@@ -13,19 +13,13 @@ class OgerExtjs {
 
   /**
   * Encode an object from a php array into json.
-  * @param $obj The array with the object values.
-  * @param $success Boolean flag for the success property. Defaults to true.
-  *        Null supresses the setting if the object already has a success property.
-  *        If no success property is present then it is set to true.
+  * @param $array The array with the object values.
+  * @param $success Boolean flag for the success property. Defaults to true.<br>
+  *        - Null: Do not set a new and do not change an existing success property.
   * @return Json encoded object.
   */
   public static function enc($obj = array(), $success = true) {
-    if ($success === null) {
-      if (!array_key_exists("success", $obj)) {
-        $obj["success"] = true;
-      }
-    }
-    else {  // explicit setting
+    if ($success !== null) {
       $obj["success"] = (boolean)$success;
     }
     return json_encode($obj);

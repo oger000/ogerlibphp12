@@ -56,18 +56,18 @@ class OgerDb {
         $fieldStmt .= ($fieldStmt ? "," : '') . static::encName($field);
         $valueStmt .= ($valueStmt ? "," : '') . ":$field";
       }
-      $stmt .= "INSERT INTO " . static::$encName($tableName) . " ($fieldStmt) VALUES ($valueStmt)";
+      $stmt .= "INSERT INTO " . static::encName($tableName) . " ($fieldStmt) VALUES ($valueStmt)";
       break;
     case "UPDATE":
       foreach ($fields as $field) {
-        $stmtSet .= ($stmtSet ? "," : '') . static::$encName($field) . "=:$field";
+        $stmtSet .= ($stmtSet ? "," : '') . static::encName($field) . "=:$field";
       }
-      $stmt .= "UPDATE " . static::$encName($tableName) . " SET $stmtSet";
+      $stmt .= "UPDATE " . static::encName($tableName) . " SET $stmtSet";
       // only update needs where values
       $stmt .= static::whereStmt($where);
       break;
     default:
-      throw new Exception("Unknown " . __CLASS__ . "::action: $action.");
+      throw new Exception("Unknown database store action: $action.");
     }
 
     if ($moreStmt) {
@@ -180,7 +180,7 @@ class OgerDb {
 
     // create where clause
     foreach ($params as $paramName) {
-      $stmt .= ($stmt ? " $glueOp " : "") . static::encName(paramName) . "=:$paramName";
+      $stmt .= ($stmt ? " $glueOp " : "") . static::encName($paramName) . "=:$paramName";
     }
 
     return $stmt;
