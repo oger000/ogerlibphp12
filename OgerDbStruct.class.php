@@ -28,6 +28,7 @@ abstract class OgerDbStruct {
   protected $dbName;  ///< Database name.
   protected $driverName;  ///< Driver name.
   protected $log;  ///< Log messages buffer.
+  protected $cmdLog;  ///< Command log buffer. Allow replay after dry-run.
 
   protected $params = array();
 
@@ -233,7 +234,7 @@ abstract class OgerDbStruct {
   public function log($msgLogLevel, $text) {
     if ($msgLogLevel <= $this->getParam("log-level")) {
       if ($this->getParam("dry-run")) {
-        $text = "-- dry-run: " . $text;
+        $text = preg_replace("/^/ms", "-- dry-run: ", $text);
       }
       if ($this->getParam("echo-log")) {
         echo $text;
@@ -270,6 +271,27 @@ abstract class OgerDbStruct {
 
 
   /**
+  * Get command log.
+  * Allow replay of command stack - especially after a dry-run.
+  * @return Logged commands delimited by semicolon.
+  */
+  public function getCmdLog() {
+    return $this->cmdLog;
+  }  // eo get cmd log
+
+
+  /**
+  * Flush command log.
+  * @return Logged commands delimited by semicolon.
+  */
+  public function flushCmdLog() {
+    $ret = $this->cmdLog;
+    $this->cmdLog = "";
+    return $ret;
+  }  // eo flush log
+
+
+  /**
   * Quote a table or column name.
   * @param $name Name to be quoted.
   */
@@ -290,6 +312,7 @@ abstract class OgerDbStruct {
       if ($stmt) {
         $this->log(static::LOG_CMD, "$stmt;\n");
         $this->changeCount++;
+        $this->cmdLog .= "$stmt;\n";
         if (!$this->getParam("dry-run")) {
           $pstmt = $this->conn->prepare($stmt);
           $pstmt->execute();
