@@ -32,8 +32,12 @@ class OgerExtjs {
   * @param $root Name of the data root property. Defaults to "data".
   * @return Json encoded object.
   */
-  public static function encData($obj = array(), $root = "data") {
-    $data = array($root => $obj);
+  public static function encData($obj = array(), $root = null, $more = array()) {
+    if (!$root) {
+      $root = "data";
+    }
+    $all = $more;
+    $all[$root] = $obj;
     // data objects always are success respones
     return static::enc($data, true);
   }  // eo json encoded data object
