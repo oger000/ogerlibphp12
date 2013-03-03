@@ -44,7 +44,7 @@ class OgerExtjs {
 
     if (!is_array($more)) {
       // numeric primitive-type is reserved for total count in paging grids
-      if (is_numeric($more) {
+      if (is_numeric($more)) {
         $more = array($countName => intval($more));
       }
       else {  // otherwise we ignore the more param if not an array
