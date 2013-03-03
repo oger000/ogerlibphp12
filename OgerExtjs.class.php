@@ -29,16 +29,32 @@ class OgerExtjs {
   /**
   * Encode data from a php array into json.
   * @param $array The array with the data values.
-  * @param $root Name of the data root property. Defaults to "data".
+  * @param $dataRoot Name of the data root property. Defaults to "data".
   * @return Json encoded array.
   */
-  public static function encData($array = array(), $root = null, $more = array()) {
-    if (!$root) {
-      $root = "data";
+  public static function encData($array = array(), $more = array(), $dataRoot = null, $countName = null) {
+
+    if (!$dataRoot) {
+      $dataRoot = "data";
     }
-    $all = $more;
-    $all[$root] = $array;
-    // data array always are success respones
+
+    if (!$countName) {
+      $countName = "count";
+    }
+
+    if (!is_array($more)) {
+      // numeric primitive-type is reserved for total count in paging grids
+      if (is_numeric($more) {
+        $more = array($countName => intval($more));
+      }
+      else {  // otherwise we ignore the more param if not an array
+        $more = array();
+      }
+    }
+
+    $all = array($dataRoot => $array);
+    $all = array_merge($more, $all);
+
     return static::enc($all, true);
   }  // eo json encoded data array
 
