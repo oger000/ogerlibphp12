@@ -32,20 +32,20 @@ class OgerExtjs {
   * @param $dataRoot Name of the data root property. Defaults to "data".
   * @return Json encoded array.
   */
-  public static function encData($data = array(), $other = array(), $dataRoot = null, $countName = null) {
+  public static function encData($data = array(), $other = array(), $dataRoot = null, $totalName = null) {
 
     if (!$dataRoot) {
       $dataRoot = "data";
     }
 
-    if (!$countName) {
-      $countName = "count";
+    if (!$totalName) {
+      $totalName = "total";
     }
 
     if (!is_array($other)) {
       // numeric primitive-type is reserved for total count in paging grids
       if (is_numeric($other)) {
-        $other = array($countName => intval($other));
+        $other = array($totalName => intval($other));
       }
       else {  // otherwise we ignore the more param if not an array
         $other = array();
