@@ -13,26 +13,26 @@ class OgerExtjs {
 
   /**
   * Encode a php array into json.
-  * @param $array The array with values.
+  * @param $arr The array with values.
   * @param $success Boolean flag for the success property. Defaults to true.<br>
   *        - Null: Do not set a new and do not change an existing success property.
   * @return Json encoded array.
   */
-  public static function enc($array = array(), $success = true) {
+  public static function enc($arr = array(), $success = true) {
     if ($success !== null) {
-      $array["success"] = (boolean)$success;
+      $arr["success"] = (boolean)$success;
     }
-    return json_encode($array);
+    return json_encode($arr);
   }  // eo json encoded array
 
 
   /**
   * Encode data from a php array into json.
-  * @param $array The array with the data values.
+  * @param $arr The array with the data values.
   * @param $dataRoot Name of the data root property. Defaults to "data".
   * @return Json encoded array.
   */
-  public static function encData($array = array(), $more = array(), $dataRoot = null, $countName = null) {
+  public static function encData($data = array(), $other = array(), $dataRoot = null, $countName = null) {
 
     if (!$dataRoot) {
       $dataRoot = "data";
@@ -42,18 +42,18 @@ class OgerExtjs {
       $countName = "count";
     }
 
-    if (!is_array($more)) {
+    if (!is_array($other)) {
       // numeric primitive-type is reserved for total count in paging grids
-      if (is_numeric($more)) {
-        $more = array($countName => intval($more));
+      if (is_numeric($other)) {
+        $other = array($countName => intval($other));
       }
       else {  // otherwise we ignore the more param if not an array
-        $more = array();
+        $other = array();
       }
     }
 
-    $all = array($dataRoot => $array);
-    $all = array_merge($more, $all);
+    $all = array($dataRoot => $data);
+    $all = array_merge($other, $all);
 
     return static::enc($all, true);
   }  // eo json encoded data array

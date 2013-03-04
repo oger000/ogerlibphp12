@@ -130,7 +130,7 @@ class OgerDb {
   */
   public static function getStmtParamNames($stmt) {
 
-    preg_match_all('/:([a-z_][a-z0-9_]*)/i', $stmt, $matches);
+    preg_match_all("/:([a-z_][a-z0-9_]*)/i", $stmt, $matches);
     return $matches[1];
   }  // eo get stmt param names
 
