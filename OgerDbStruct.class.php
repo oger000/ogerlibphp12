@@ -28,6 +28,7 @@ abstract class OgerDbStruct {
   protected $dbName;  ///< Database name.
   protected $driverName;  ///< Driver name.
   protected $log;  ///< Log messages buffer.
+  protected $cmdLog;  ///< Log commands.
 
   protected $params = array();
 
@@ -81,23 +82,23 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Create head info for struct array.
+  * Get new head info for struct array.
   * @return Header for struct array.
   */
-  public function createStructHead() {
+  public function getNewStructHead() {
 
     // preapre db struct array
     $startTime = time();
 
     $struct = array();
-    $struct["DBSTRUCT_META"] = array(
+    $struct['DBSTRUCT_META'] = array(
       "DRIVER_NAME" => $this->driverName,
       "SERIAL" => $startTime,
       "TIME" => date("c", $startTime),
     );
 
-    $struct["SCHEMA_META"] = array();
-    $struct["TABLES"] = array();
+    $struct['SCHEMA_META'] = array();
+    $struct['TABLES'] = array();
 
     return $struct;
   }  // eo create struct head
@@ -232,8 +233,28 @@ abstract class OgerDbStruct {
   */
   public function log($msgLogLevel, $text) {
     if ($msgLogLevel <= $this->getParam("log-level")) {
+      // if text starts with sql comment then populate this to every line
+      // of this log text
+      if (substr($text, 0, 3) == "-- ") {
+        $finalNl = false;
+        if (substr($text, -1) == "\n") {
+          $finalNl = true;
+          $text = substr($text, 0, -1);
+        }
+        $lines = explode("\n", $text);
+        $text = "";
+        foreach ($lines as &$line) {
+          if (trim($line) && substr($line, 0, 3) != "-- ") {
+            $line = "-- $line";
+          }
+        }
+        $text = implode("\n", $lines);
+        if ($finalNl) {
+          $text .= "\n";
+        }
+      }
       if ($this->getParam("dry-run")) {
-        $text = "-- dry-run: " . $text;
+        $text = preg_replace("/^/ms", "-- dry-run: ", $text);
       }
       if ($this->getParam("echo-log")) {
         echo $text;
@@ -269,6 +290,26 @@ abstract class OgerDbStruct {
   }  // eo flush log
 
 
+
+  /**
+  * Get command log.
+  * @return Command log.
+  */
+  public function getCmdLog() {
+    return $this->cmdLog;
+  }  // eo get cmd log
+
+  /**
+  * Flush command log buffer.
+  * @return Command log.
+  */
+  public function flushCmdLog() {
+    $ret = $this->cmdLog;
+    $this->cmdLog = "";
+    return $ret;
+  }  // eo flush command log
+
+
   /**
   * Quote a table or column name.
   * @param $name Name to be quoted.
@@ -289,6 +330,7 @@ abstract class OgerDbStruct {
     foreach ($stmts as $stmt) {
       if ($stmt) {
         $this->log(static::LOG_CMD, "$stmt;\n");
+        $this->cmdLog .= "$stmt;\n";
         $this->changeCount++;
         if (!$this->getParam("dry-run")) {
           $pstmt = $this->conn->prepare($stmt);
