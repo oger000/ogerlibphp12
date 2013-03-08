@@ -310,7 +310,9 @@ abstract class OgerDbStruct {
     $stmts = explode(";", $stmt);
     foreach ($stmts as $stmt) {
       if ($stmt) {
-        $this->log(static::LOG_CMD, "-- " . date("c") . " Begin change:\n");
+        if (!$this->getParam("dry-run")) {
+          $this->log(static::LOG_CMD, "-- " . date("c") . " Begin change:\n");
+        }
         $this->log(static::LOG_CMD, "$stmt;\n");
         $this->changeCount++;
         if (!$this->getParam("dry-run")) {
