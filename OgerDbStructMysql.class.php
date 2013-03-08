@@ -66,15 +66,6 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
   /**
-   * Reload the internal current database struct info.
-   */
-  public function reloadCurDbStruct($opts = array()) {
-    $this->curDbStruct = static::getDbStruct($opts);
-    return $this->curDbStruct;
-  }  // eo invalidate current dbstruct
-
-
-  /**
   * Get the current database structure.
   * @see OgerDbStruct::getDbStruct().
   */
@@ -1372,6 +1363,20 @@ class OgerDbStructMysql extends OgerDbStruct {
     // return per value
     return $columns;
   }  // eo order foreign key columns
+
+
+
+  /**
+   * Reload the internal current database struct info.
+   * Allow reload of internal current structure for external user.
+   */
+  public function reloadCurDbStruct($opts = array()) {
+    $this->curDbStruct = static::getDbStruct($opts);
+    return $this->curDbStruct;
+  }  // eo invalidate current dbstruct
+
+
+
 
 
 

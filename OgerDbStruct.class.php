@@ -28,7 +28,6 @@ abstract class OgerDbStruct {
   protected $dbName;  ///< Database name.
   protected $driverName;  ///< Driver name.
   protected $log;  ///< Log messages buffer.
-  protected $cmdLog;  ///< Log commands.
 
   protected $params = array();
 
@@ -291,24 +290,6 @@ abstract class OgerDbStruct {
 
 
 
-  /**
-  * Get command log.
-  * @return Command log.
-  */
-  public function getCmdLog() {
-    return $this->cmdLog;
-  }  // eo get cmd log
-
-  /**
-  * Flush command log buffer.
-  * @return Command log.
-  */
-  public function flushCmdLog() {
-    $ret = $this->cmdLog;
-    $this->cmdLog = "";
-    return $ret;
-  }  // eo flush command log
-
 
   /**
   * Quote a table or column name.
@@ -329,12 +310,18 @@ abstract class OgerDbStruct {
     $stmts = explode(";", $stmt);
     foreach ($stmts as $stmt) {
       if ($stmt) {
+        $this->log(static::LOG_CMD, "-- " . date("c") . " Begin change:\n");
         $this->log(static::LOG_CMD, "$stmt;\n");
-        $this->cmdLog .= "$stmt;\n";
         $this->changeCount++;
         if (!$this->getParam("dry-run")) {
           $pstmt = $this->conn->prepare($stmt);
-          $pstmt->execute();
+          try {
+            $pstmt->execute();
+            $this->log(static::LOG_CMD, "-- " . date("c") . " End change.\n");
+          }
+          catch (Exception $ex) {
+            throw new Exception($ex->getMessage() . ": $stmt;");
+          }
         }
       }
     }
