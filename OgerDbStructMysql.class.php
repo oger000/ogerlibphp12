@@ -64,6 +64,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   }  // eo constructor
 
 
+
   /**
   * Get the current database structure.
   * @see OgerDbStruct::getDbStruct().
@@ -79,7 +80,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }
 
     // get structure head
-    $struct = $this->createStructHead();
+    $struct = $this->getNewStructHead();
 
     // get schema structure
     $pstmt = $this->conn->prepare("
@@ -474,7 +475,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       }  // eo table loop for foreign keys
     }  // eo include foreign keys
 
-    // invalide the current database struct array because we did not update internally
+    // invalidate the current database struct array because we did not update internally
     if ($this->curDiffCount > 0) {
       $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
       $this->curDbStruct = null;
@@ -655,7 +656,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
     }  // eo table loop
 
-    // invalide the current database struct array because we did not update internally
+    // invalidate the current database struct array because we did not update internally
     if ($this->curDiffCount > 0) {
       $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
       $this->curDbStruct = null;
@@ -734,8 +735,8 @@ class OgerDbStructMysql extends OgerDbStruct {
       $tableName = $this->quoteName($curColumnStruct["TABLE_NAME"]);
       $curColumnName = $this->quoteName($curColumnStruct["COLUMN_NAME"]);
 
-      $this->log(static::LOG_NOTICE, "-- Old: $curColumnSql\n");
-      $this->log(static::LOG_NOTICE, "-- New: $refColumnSql\n");
+      $this->log(static::LOG_DEBUG, "-- Old: $curColumnSql\n" .
+                                    "-- New: $refColumnSql\n");
 
       // TODO: include AFTER | FIRST position here?
       $stmt = "ALTER TABLE {$tableName} CHANGE COLUMN $curColumnName $refColumnSql";
@@ -761,8 +762,8 @@ class OgerDbStructMysql extends OgerDbStruct {
       $tableName = $this->quoteName($refIndexStruct["INDEX_META"]["TABLE_NAME"]);
       $curIndexName = $this->quoteName($curIndexStruct["INDEX_META"]["INDEX_NAME"]);
 
-      $this->log(static::LOG_NOTICE, "-- Old: $curIndexSql\n" .
-                                     "-- New: $refIndexSql\n");
+      $this->log(static::LOG_DEBUG, "-- Old: $curIndexSql\n" .
+                                    "-- New: $refIndexSql\n");
 
       $stmt = "ALTER TABLE $tableName DROP INDEX $curIndexName;" .
               "ALTER TABLE $tableName ADD $refIndexSql";
@@ -788,8 +789,8 @@ class OgerDbStructMysql extends OgerDbStruct {
       $tableName = $this->quoteName($refFkStruct["FOREIGN_KEY_META"]["TABLE_NAME"]);
       $curFkName = $this->quoteName($curFkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"]);
 
-      $this->log(static::LOG_NOTICE, "-- Old: $curFkSql\n" .
-                                     "-- New: $refFkSql\n");
+      $this->log(static::LOG_DEBUG, "-- Old: $curFkSql\n" .
+                                    "-- New: $refFkSql\n");
 
       $stmt = "ALTER TABLE $tableName DROP FOREIGN KEY $curFkName;" .
               "ALTER TABLE $tableName ADD $refFkSql";
@@ -846,7 +847,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
     }  // eo table loop
 
-    // invalide the current database struct array because we did not update internally
+    // invalidate the current database struct array because we did not update internally
     if ($this->curDiffCount > 0) {
       $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
       $this->curDbStruct = null;
@@ -906,7 +907,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       $nextCurColName = reset($curColNames);
 
       if ($colName != $nextCurColName) {
-        $columnDef = $this->columnDefStmt($curTableStruct["COLUMNS"][$colKey], array("afterColumnName" => $afterColumn));
+        $columnDef = $this->columnDefStmt($refTableStruct["COLUMNS"][$colKey], array("afterColumnName" => $afterColumn));
         $colNameQ = $this->quoteName($colName);
         $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colNameQ $columnDef";
         $this->execChange($stmt);
@@ -990,7 +991,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       }  // eo existing table
     }  // eo table loop
 
-    // invalide the current database struct array because we did not update internally
+    // invalidate the current database struct array because we did not update internally
     if ($this->curDiffCount > 0) {
       $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
       $this->curDbStruct = null;
@@ -1362,6 +1363,20 @@ class OgerDbStructMysql extends OgerDbStruct {
     // return per value
     return $columns;
   }  // eo order foreign key columns
+
+
+
+  /**
+   * Reload the internal current database struct info.
+   * Allow reload of internal current structure for external user.
+   */
+  public function reloadCurDbStruct($opts = array()) {
+    $this->curDbStruct = static::getDbStruct($opts);
+    return $this->curDbStruct;
+  }  // eo invalidate current dbstruct
+
+
+
 
 
 

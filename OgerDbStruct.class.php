@@ -82,23 +82,23 @@ abstract class OgerDbStruct {
 
 
   /**
-  * Create head info for struct array.
+  * Get new head info for struct array.
   * @return Header for struct array.
   */
-  public function createStructHead() {
+  public function getNewStructHead() {
 
     // preapre db struct array
     $startTime = time();
 
     $struct = array();
-    $struct["DBSTRUCT_META"] = array(
+    $struct['DBSTRUCT_META'] = array(
       "DRIVER_NAME" => $this->driverName,
       "SERIAL" => $startTime,
       "TIME" => date("c", $startTime),
     );
 
-    $struct["SCHEMA_META"] = array();
-    $struct["TABLES"] = array();
+    $struct['SCHEMA_META'] = array();
+    $struct['TABLES'] = array();
 
     return $struct;
   }  // eo create struct head
@@ -233,6 +233,26 @@ abstract class OgerDbStruct {
   */
   public function log($msgLogLevel, $text) {
     if ($msgLogLevel <= $this->getParam("log-level")) {
+      // if text starts with sql comment then populate this to every line
+      // of this log text
+      if (substr($text, 0, 3) == "-- ") {
+        $finalNl = false;
+        if (substr($text, -1) == "\n") {
+          $finalNl = true;
+          $text = substr($text, 0, -1);
+        }
+        $lines = explode("\n", $text);
+        $text = "";
+        foreach ($lines as &$line) {
+          if (trim($line) && substr($line, 0, 3) != "-- ") {
+            $line = "-- $line";
+          }
+        }
+        $text = implode("\n", $lines);
+        if ($finalNl) {
+          $text .= "\n";
+        }
+      }
       if ($this->getParam("dry-run")) {
         $text = preg_replace("/^/ms", "-- dry-run: ", $text);
       }
@@ -268,6 +288,8 @@ abstract class OgerDbStruct {
     $this->log = "";
     return $ret;
   }  // eo flush log
+
+
 
 
   /**
@@ -310,12 +332,21 @@ abstract class OgerDbStruct {
     $stmts = explode(";", $stmt);
     foreach ($stmts as $stmt) {
       if ($stmt) {
+        if (!$this->getParam("dry-run")) {
+          $this->log(static::LOG_CMD, "-- " . date("c") . " Begin change:\n");
+        }
         $this->log(static::LOG_CMD, "$stmt;\n");
         $this->changeCount++;
         $this->cmdLog .= "$stmt;\n";
         if (!$this->getParam("dry-run")) {
           $pstmt = $this->conn->prepare($stmt);
-          $pstmt->execute();
+          try {
+            $pstmt->execute();
+            $this->log(static::LOG_CMD, "-- " . date("c") . " End change.\n");
+          }
+          catch (Exception $ex) {
+            throw new Exception($ex->getMessage() . ": $stmt;");
+          }
         }
       }
     }
