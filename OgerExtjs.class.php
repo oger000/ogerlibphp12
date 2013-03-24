@@ -60,12 +60,23 @@ class OgerExtjs {
 
 
   /**
+  * Encode a message.
+  * @param $msg The error message.
+  * @param $usccess True for success messages otherwise false.
+  * @return Json encoded array.
+  */
+  public static function msg($msg, $success = true) {
+    return static::enc(array("msg" => $msg), $success);
+  }  // eo msg
+
+
+  /**
   * Encode an error message.
   * @param $msg The error message.
   * @return Json encoded array.
   */
   public static function errorMsg($msg) {
-    return static::enc(array("msg" => $msg), false);
+    return static::msg($msg, false);
   }  // eo errorMsg
 
 
