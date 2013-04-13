@@ -356,6 +356,9 @@ class OgerDbStructMysql extends OgerDbStruct {
   }  // eo get table struc
 
 
+  // ##############################################
+  // DRIVER SPECIFIC HELPERS
+  // ##############################################
 
   /**
    * Precheck before process changes.
@@ -386,6 +389,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     }
 
     // do not overwrite case sensitive database systems with lowercase converted reference structures
+    // lower_case_table_names: 0=linux, 1=windows, 2=mac
     // TODO provide forceLowerCase or ignoreLowerCase option ???
     if ($this->curDbStruct["SCHEMA_META"]["lower_case_table_names"] != 1 &&
         $this->refDbStruct["SCHEMA_META"]["lower_case_table_names"] == 1) {
@@ -401,7 +405,7 @@ class OgerDbStructMysql extends OgerDbStruct {
    * @param $refTableStruct Array with the reference table structure.
    * @return True if the table was renamed because of lettercase change, false otherwise.
   */
-  private function handleTableCase($refTableStruct, $reload = true) {
+  private function handleTableCase($refTableStruct) {
 
     $this->preProcessCheck();
 
@@ -414,8 +418,13 @@ class OgerDbStructMysql extends OgerDbStruct {
       return false;
     }
 
-    // table name can only differ in lettercase and this is only of
-    // interest on case sensitive systems
+    // check that table name only differ in lettercase
+    // TODO throw exception or write error log ?
+    if (strtolower($refTableName) != strtolower($curTableName)) {
+      return false;
+    }
+
+    // difference in lettercase is only of interest on case sensitive systems
     if ($refTableName != $curTableName &&
         $this->curDbStruct["SCHEMA_META"]["lower_case_table_names"] != 1) {
 
@@ -424,21 +433,29 @@ class OgerDbStructMysql extends OgerDbStruct {
       $stmt = "RENAME TABLE {$curTableNameQ} TO {$refTableNameQ}";
       $this->execChange($stmt);
 
-      // do not reload on dry-run because we did not rename
-      if ($reload) {
-        if ($this->getParam("dry-run")) {
-          $this->curDbStruct["TABLES"][$tableKey]["TABLE_META"]["TABLE_NAME"] = $refTableName;
-        }
-        else {
-          $this->curDbStruct["TABLES"][$tableKey] = $this->getTableStruct($refTableName);
-        }
-      }
+
+      // adapt lettercase on the fly
+      array_walk_recursive($this->curDbStruct["TABLES"][$tableKey], "OgerDbStructMysql::walkTableCase", $refTableName);
 
       return true;
     }  // eo rename lettercase
 
     return false;
   } // eo table name lettercase handling
+
+
+  /**
+  * Adopt current table structure array on the fly after table case change.
+  */
+  public static function walkTableCase(&$oldValue, $key, $newValue) {
+
+    // sanity check to restrict change to matching table names
+    if ($key == "TABLE_NAME" &&
+        strtolower($oldValue) == strtolower($newValue)) {
+      $oldValue = $newValue;
+    }
+  }  // eo adopt table case in structure
+
 
 
   // ##############################################
@@ -449,7 +466,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Add missing tables, columns, indices or foreign keys to the database.
   * @see OgerDbStruct::addDbStruct().
   */
-  public function addDbStruct($refDbStruct = null, $opts = array()) {
+  public function addDbStruct($refDbStruct = null) {
 
     $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
@@ -460,19 +477,16 @@ class OgerDbStructMysql extends OgerDbStruct {
       $refTableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
       $curTableStruct = $this->curDbStruct["TABLES"][$refTableKey];
       if (!$curTableStruct) {
-        $this->addTable($refTableStruct, array("noForeignKeys" => true));
+        $this->addTableCore($refTableStruct);
       }
-      else {
-        $this->addTableElements($refTableStruct, array("noForeignKeys" => true));
-      }
+      $this->addTableMissingColumns($refTableStruct);
+      $this->addTableMissingIndices($refTableStruct);
     }  // eo table loop
 
 
     // add foreign keys after all tables, columns and indices has been created
-    if (!$opts["noForeignKeys"]) {
-      foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
-        $this->addTableElements($refTableStruct, array("noColumns" => true, "noIndices" => true));
-      }  // eo table loop for foreign keys
+    foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
+      $this->addTableMissingForeignKeys($refTableStruct);
     }  // eo include foreign keys
 
     // invalidate the current database struct array because we did not update internally
@@ -492,7 +506,22 @@ class OgerDbStructMysql extends OgerDbStruct {
   *        - noIndices<br>
   *        - noForeignKeys
   */
-  public function addTable($tableStruct, $opts = array()) {
+  public function addTable($tableStruct) {
+
+    $this->preProcessCheck();
+
+    $this->addTableCore($tableStruct);  // includes columns
+    $this->addTableMissingIndices($tableStruct);
+    $this->addTableMissingForeignKeys($tableStruct);
+  }  // eo add table
+
+
+  /**
+  * Add table (with columns, but without indexes
+  * and without foreign keys) to the current database structure.
+  * @param $tableStruct Array with the table structure.
+  */
+  public function addTableCore($tableStruct) {
 
     $this->preProcessCheck();
 
@@ -510,20 +539,6 @@ class OgerDbStructMysql extends OgerDbStruct {
       $delim = ",\n  ";
     }  // eo column loop
 
-    // indices
-    if (!$opts["noIndices"]) {
-      foreach ((array)$tableStruct["INDICES"] as $indexKey => $indexStruct) {
-        $stmt .= $delim . $this->indexDefStmt($indexStruct);
-      }  // eo index loop
-    }  // eo include indices
-
-    // foreign keys
-    if (!$opts["noForeignKeys"]) {
-      foreach ((array)$tableStruct["FOREIGN_KEYS"] as $fkKey => $fkStruct) {
-        $stmt .= $delim . $this->foreignKeyDefStmt($fkStruct);
-      }  // eo constraint loop
-    }  // eo include foreign keys
-
     $stmt .= "\n)";
 
     // table defaults
@@ -540,19 +555,20 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // execute the statement
     $this->execChange($stmt);
+
+    // update current db struct array
+    unset($tableStruct["INDICES"]);
+    unset($tableStruct["FOREIGN_KEYS"]);
+    $this->curDbStruct["TABLES"][strtolower($tableStruct["TABLE_META"]["TABLE_NAME"])] = $tableStruct;
+
   }  // eo add table
 
 
   /**
-  * Add missing table elements.
+  * Add missing columns to a table.
   * @param $refTableStruct Array with the reference table structure.
-  * @param $opts Optional options array where the key is the option name.<br>
-  *        Valid options are:<br>
-  *        - noColumns<br>
-  *        - noIndices<br>
-  *        - noForeignKeys<br>
   */
-  public function addTableElements($refTableStruct = null, $opts = array()) {
+  public function addTableMissingColumns($refTableStruct = null) {
 
     $this->preProcessCheck();
 
@@ -560,55 +576,80 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->handleTableCase($refTableStruct);
     $curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
 
-    // add columns
-    if (!$opts["noColumns"]) {
-      $this->orderTableStructColumns($refTableStruct["COLUMNS"]);
-      $afterColumnName = "";
-      foreach ((array)$refTableStruct["COLUMNS"] as $refColumnKey => $refColumnStruct) {
-        if (!$curTableStruct["COLUMNS"][$refColumnKey]) {
-          $this->addTableColumn($refColumnStruct, array("afterColumnName" => $afterColumnName));
-        }
-        // this column exists (old or new created) so the next missing column will be added after this
-        $afterColumnName = $refColumnStruct["COLUMN_NAME"];
-      }  // eo column loop
-    }  // eo columns
-
-    // indices
-    if (!$opts["noIndices"]) {
-      foreach ((array)$refTableStruct["INDICES"] as $refIndexKey => $refIndexStruct) {
-        if (!$curTableStruct["INDICES"][$refIndexKey]) {
-          $this->addTableIndex($refIndexStruct);
-        }
+    $this->orderTableStructColumns($refTableStruct["COLUMNS"]);
+    $afterColumnName = -1;
+    foreach ((array)$refTableStruct["COLUMNS"] as $refColumnKey => $refColumnStruct) {
+      if (!$curTableStruct["COLUMNS"][$refColumnKey]) {
+        $this->addTableColumn($refColumnStruct, $afterColumnName);
       }
-    }  // eo index
+      // this column exists (old or new created) so the next missing column will be added after this
+      $afterColumnName = $refColumnStruct["COLUMN_NAME"];
+    }  // eo column loop
 
-    // foreign keys
-    if (!$opts["noForeignKeys"]) {
-      foreach ((array)$refTableStruct["FOREIGN_KEYS"] as $refFkKey => $refFkStruct) {
-        if (!$curTableStruct["FOREIGN_KEYS"][$refFkKey]) {
-          $this->addTableForeignKey($refFkStruct);
-        }
+  }  // eo add missing columns
+
+
+  /**
+  * Add missing indices.
+  * @param $refTableStruct Array with the reference table structure.
+  */
+  public function addTableMissingIndices($refTableStruct = null) {
+
+    $this->preProcessCheck();
+
+    // rename lettercase - reload current table structure
+    $this->handleTableCase($refTableStruct);
+    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
+
+    foreach ((array)$refTableStruct["INDICES"] as $refIndexKey => $refIndexStruct) {
+      if (!$curTableStruct["INDICES"][$refIndexKey]) {
+        $this->addTableIndex($refIndexStruct);
       }
-    }  // eo foreign keys
+    }
 
-  }  // eo add missing elements to a table
+  }  // eo add missing indices
+
+
+  /**
+  * Add missing foreign keys.
+  * @param $refTableStruct Array with the reference table structure.
+  */
+  public function addTableMissingForeignKeys($refTableStruct = null) {
+
+    $this->preProcessCheck();
+
+    // rename lettercase - reload current table structure
+    $this->handleTableCase($refTableStruct);
+    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
+
+    foreach ((array)$refTableStruct["FOREIGN_KEYS"] as $refFkKey => $refFkStruct) {
+      if (!$curTableStruct["FOREIGN_KEYS"][$refFkKey]) {
+        $this->addTableForeignKey($refFkStruct);
+      }
+    }
+
+  }  // eo add missing foreign keys
 
 
   /**
   * Add a column to a table structure.
   * @param $columnStruct Array with the table structure.
-  * @param $opts Optional options array. Key is option name.<br>
-  *        Valid options are:<br>
-  *        - afterColumnName: Passed to columnDefStmd(). Description see there.
+  * @param $afterColumnName: Passed to columnDefStmd(). Description see there.
   */
-  public function addTableColumn($columnStruct, $opts = array()) {
+  public function addTableColumn($columnStruct, $afterColumnName) {
+
+    $tableName = $columnStruct["TABLE_NAME"];
 
     $stmt = "ALTER TABLE " .
-            $this->quoteName($columnStruct["TABLE_NAME"]) .
+            $this->quoteName($tableName) .
             " ADD COLUMN " .
-            $this->columnDefStmt($columnStruct, $opts);
+            $this->columnDefStmt($columnStruct, $afterColumnName);
 
     $this->execChange($stmt);
+
+    // update current db struct array
+    $this->curDbStruct["TABLES"][strtolower($tablename)][strtolower($columnStruct["COLUMN_NAME"])] = $columnStruct;
+// FIXME continue here (ordinal number!)
   }  // eo add column to table
 
 
@@ -617,9 +658,16 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @param $indexStruct Array with the index structure.
   */
   public function addTableIndex($indexStruct) {
-    $tableName = $this->quoteName($indexStruct["INDEX_META"]["TABLE_NAME"]);
-    $stmt = "ALTER TABLE $tableName ADD " . $this->indexDefStmt($indexStruct, $opts);
+
+    $tableName = $indexStruct["INDEX_META"]["TABLE_NAME"];
+    $tableNameQ = $this->quoteName($tableName);
+
+    $stmt = "ALTER TABLE $tableNameQ ADD " . $this->indexDefStmt($indexStruct);
     $this->execChange($stmt);
+
+    // update current db struct array
+    $indexKey = strtolower($indexStruct["INDEX_META"]["INDEX_NAME"]);
+    $this->curDbStruct["TABLES"][strtolower($tableName)][$indexKey] = $indexStruct;
   }  // eo add index
 
 
@@ -628,9 +676,16 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @param $fkStruct Array with the foreign key structure.
   */
   public function addTableForeignKey($fkStruct) {
-    $tableName = $this->quoteName($fkStruct["FOREIGN_KEY_META"]["TABLE_NAME"]);
+
+    $tableName = $fkStruct["FOREIGN_KEY_META"]["TABLE_NAME"];
+    $tableNameQ = $this->quoteName($tableName);
+
     $stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct, $opts);
     $this->execChange($stmt);
+
+    // update current db struct array
+    $fkKey = strtolower($fkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"]);
+    $this->curDbStruct["TABLES"][strtolower($tableName)][$fkKey] = $fkStruct;
   }  // eo add foreign key
 
 
@@ -901,19 +956,19 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $tableName = $this->quoteName($tableName);
     // use current column structure because we dont want to change the column definition but only the order
-    $afterColumn = "";
+    $afterColumnName = -1;
     foreach ((array)$refColNames as $colKey => $colName) {
 
       $nextCurColName = reset($curColNames);
 
       if ($colName != $nextCurColName) {
-        $columnDef = $this->columnDefStmt($refTableStruct["COLUMNS"][$colKey], array("afterColumnName" => $afterColumn));
+        $columnDef = $this->columnDefStmt($refTableStruct["COLUMNS"][$colKey], $afterColumnName);
         $colNameQ = $this->quoteName($colName);
         $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colNameQ $columnDef";
         $this->execChange($stmt);
       }
 
-      $afterColumn = $colName;
+      $afterColumnName = $colName;
 
       // remove the processed column name from the unused current column names
       unset($curColNames[$colKey]);
@@ -1139,14 +1194,16 @@ class OgerDbStructMysql extends OgerDbStruct {
  /**
   * Create sql statement for a column definition.
   * @param $columnStruct  Array with column structure.
-  * @param $opts Optional options array. Key is option name.<br>
-  *        Valid options are:<br>
-  *        - afterColumnName: The column name after which this column should be placed.
+  * @param $afterColumnName: The column name after which this column should be placed.
+  *        Empty means append after the last column.
+  *        -1 means insert on first position.
+  * @return The SQL statement part for a column definition.
+
   *          Null means append after the last column.
   *          Any other empty value means insert on first position.
-  * @return The SQL statement part for a column definition.
+
   */
-  public function columnDefStmt($columnStruct, $opts = array()) {
+  public function columnDefStmt($columnStruct, $afterColumnName) {
 
     $stmt = $this->quoteName($columnStruct["COLUMN_NAME"]) .
             " " . $columnStruct["COLUMN_TYPE"] .
@@ -1173,15 +1230,14 @@ class OgerDbStructMysql extends OgerDbStruct {
       $stmt .= " DEFAULT $default";
     }  // eo default
 
-    // if afterColumnName is null we do nothing (that means the field is appended without position)
-    if (!is_null($opts["afterColumnName"])) {
-      // empty values result in inserting on first position
-      if (!$opts["afterColumnName"]) {
+    // if afterColumnName is empty we do nothing (that means the field is appended without position)
+    if (!$afterColumnName) {
+      // -1 result in inserting on first position
+      if ($afterColumnName == -1) {
         $stmt .= " FIRST";
       }
       else {
-        $afterColumnName = $this->quoteName($opts["afterColumnName"]);
-        $stmt .= " AFTER {$afterColumnName}";
+        $stmt .= " AFTER " . $this->quoteName($afterColumnName);
       }
     }
 

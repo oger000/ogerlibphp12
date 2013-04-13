@@ -106,11 +106,8 @@ abstract class OgerDbStruct {
   /**
   * Add missing tables, columns, indices or foreign keys to the database.
   * @param $refDbStruct Array with the reference database structure.
-  * @param $opts Optional options array. Keys are options.<br>
-  *        Valid optios are:<br>
-  *        - noForeignKeys<br>
   */
-  abstract public function addDbStruct($refDbStruct = null, $opts = array());
+  abstract public function addDbStruct($refDbStruct = null);
 
 
   /**
