@@ -489,12 +489,6 @@ class OgerDbStructMysql extends OgerDbStruct {
       $this->addTableMissingForeignKeys($refTableStruct);
     }  // eo include foreign keys
 
-    // invalidate the current database struct array because we did not update internally
-    if ($this->curDiffCount > 0) {
-      $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
-      $this->curDbStruct = null;
-    }
-
   }  // eo add db struc
 
 
@@ -572,7 +566,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck();
 
-    // rename lettercase - reload current table structure
+    // rename lettercase
     $this->handleTableCase($refTableStruct);
     $curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
 
@@ -597,7 +591,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck();
 
-    // rename lettercase - reload current table structure
+    // rename lettercase
     $this->handleTableCase($refTableStruct);
     $curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
 
@@ -618,7 +612,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck();
 
-    // rename lettercase - reload current table structure
+    // rename lettercase
     $this->handleTableCase($refTableStruct);
     $curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
 
@@ -638,6 +632,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function addTableColumn($columnStruct, $afterColumnName) {
 
+    $this->preProcessCheck();
     $tableName = $columnStruct["TABLE_NAME"];
 
     $stmt = "ALTER TABLE " .
@@ -648,8 +643,17 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->execChange($stmt);
 
     // update current db struct array
-    $this->curDbStruct["TABLES"][strtolower($tablename)][strtolower($columnStruct["COLUMN_NAME"])] = $columnStruct;
-// FIXME continue here (ordinal number!)
+    $tableKey = strtolower($tablename);
+    $colKey = strtolower($columnStruct["COLUMN_NAME"]);
+    foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as &$tmpCol) {
+      if ($tmpCol["ORDINAL_POSITION"] >= $columnStruct["ORDINAL_POSITION"]) {
+        $tmpCol["ORDINAL_POSITION"]++;
+      }
+    }
+    $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$colKey] = $columnStruct;
+    // reorder column struct array
+    $this->orderTableStructColumns($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
+
   }  // eo add column to table
 
 
@@ -659,6 +663,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function addTableIndex($indexStruct) {
 
+    $this->preProcessCheck();
     $tableName = $indexStruct["INDEX_META"]["TABLE_NAME"];
     $tableNameQ = $this->quoteName($tableName);
 
@@ -677,6 +682,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function addTableForeignKey($fkStruct) {
 
+    $this->preProcessCheck();
     $tableName = $fkStruct["FOREIGN_KEY_META"]["TABLE_NAME"];
     $tableNameQ = $this->quoteName($tableName);
 
@@ -687,6 +693,7 @@ class OgerDbStructMysql extends OgerDbStruct {
     $fkKey = strtolower($fkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"]);
     $this->curDbStruct["TABLES"][strtolower($tableName)][$fkKey] = $fkStruct;
   }  // eo add foreign key
+
 
 
   // ##############################################
@@ -707,11 +714,22 @@ class OgerDbStructMysql extends OgerDbStruct {
     foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
       $curTableStruct = $this->curDbStruct["TABLES"][$refTableKey];
       if ($curTableStruct) {
-        $this->refreshTable($refTableStruct);
+        $this->refreshTableCore($refTableStruct);
+        $this->refreshTableIndizes($refTableStruct);
       }
     }  // eo table loop
 
+    // refresh foreign keys after all tables, columns and indices has been refreshed
+    foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
+      $curTableStruct = $this->curDbStruct["TABLES"][$refTableKey];
+      if ($curTableStruct) {
+        $this->refreshTableForeignKeys($refTableStruct);
+      }
+    }  // eo refresh foreign keys
+
+
     // invalidate the current database struct array because we did not update internally
+// FIXME
     if ($this->curDiffCount > 0) {
       $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
       $this->curDbStruct = null;
@@ -729,47 +747,118 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck();
 
-    // rename lettercase - reload current table structure
+    // rename lettercase
     $this->handleTableCase($refTableStruct);
     $curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
 
-    // table meta / defaults
+    refreshTableCore($refTableStruct);
+    refreshTableColumns($refTableStruct);
+    refreshTableIndizes($refTableStruct);
+    refreshTableForeignKeys($refTableStruct);
+  }  // eo refresh table
+
+
+  /**
+  * Refresh an existing table. Meta info and defaults.
+  * @param $refTableStruct Array with the reference table structure.
+  */
+  public function refreshTableCore($refTableStruct = null) {
+
+    $this->preProcessCheck();
+
+    // rename lettercase
+    $this->handleTableCase($refTableStruct);
+
+    $tableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
+    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($tableName)];
+
     $refTableMeta = $refTableStruct["TABLE_META"];
     $curTableMeta = $curTableStruct["TABLE_META"];
     if ($refTableMeta["TABLE_COLLATION"] != $curTableMeta["TABLE_COLLATION"] ||
         $refTableMeta["ENGINE"] != $curTableMeta["ENGINE"]) {
 
       $stmt .= "ALTER TABLE " .
-               $this->quoteName($refTableMeta["TABLE_NAME"]) .
+               $this->quoteName($tableName) .
                " ENGINE=" . $refTableMeta["ENGINE"] .
                " DEFAULT" .
                " COLLATE=" . $refTableMeta["TABLE_COLLATION"];
       $this->execChange($stmt);
+
+      // update current db struct array
+      $this->curDbStruct["TABLES"][strtolower($tableName)]["TABLE_META"] = $refTableMeta;
+
     }  // eo table meta
 
+  }  // eo refresh table core
 
-    // refresh existing columns
+
+  /**
+  * Refresh columns of an existing table.
+  * @param $refTableStruct Array with the reference table structure.
+  */
+  public function refreshTableColumns($refTableStruct = null) {
+
+    $this->preProcessCheck();
+
+    // rename lettercase
+    $this->handleTableCase($refTableStruct);
+
+    $tableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
+    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($tableName)];
+
     foreach ((array)$refTableStruct["COLUMNS"] as $refColumnKey => $refColumnStruct) {
       if ($curTableStruct["COLUMNS"][$refColumnKey]) {
         $this->refreshTableColumn($refColumnStruct);
       }
     }
 
-    // refresh existing indices
+  }  // eo refresh table columns
+
+
+  /**
+  * Refresh indizes of an existing table.
+  * @param $refTableStruct Array with the reference table structure.
+  */
+  public function refreshTableIndizes($refTableStruct = null) {
+
+    $this->preProcessCheck();
+
+    // rename lettercase
+    $this->handleTableCase($refTableStruct);
+
+    $tableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
+    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($tableName)];
+
     foreach ((array)$refTableStruct["INDICES"] as $refIndexKey => $refIndexStruct) {
       if ($curTableStruct["INDICES"][$refIndexKey]) {
         $this->refreshTableIndex($refIndexStruct);
       }
     }
 
-    // refresh existing foreign keys
+  }  // eo refresh table indizes
+
+
+  /**
+  * Refresh foreign keys of an existing table.
+  * @param $refTableStruct Array with the reference table structure.
+  */
+  public function refreshTableForeignKeys($refTableStruct = null) {
+
+    $this->preProcessCheck();
+
+    // rename lettercase
+    $this->handleTableCase($refTableStruct);
+
+    $tableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
+    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($tableName)];
+
     foreach ((array)$refTableStruct["FOREIGN_KEYS"] as $refFkKey => $refFkStruct) {
       if ($curTableStruct["FOREIGN_KEYS"][$refFkKey]) {
         $this->refreshTableForeignKey($refFkStruct);
       }
     }
 
-  }  // eo refresh table
+  }  // eo refresh table foreign keys
 
 
   /**
@@ -779,8 +868,11 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function refreshTableColumn($refColumnStruct) {
 
-    $curColumnStruct = $this->curDbStruct["TABLES"][strtolower($refColumnStruct["TABLE_NAME"])]
-                       ["COLUMNS"][strtolower($refColumnStruct["COLUMN_NAME"])];
+    $tableName = $refColumnStruct["TABLE_NAME"]);
+    $columnName = $refColumnStruct["COLUMN_NAME"];xxxx
+
+    $curColumnStruct = $this->curDbStruct["TABLES"][strtolower($tableName)]
+                       ["COLUMNS"][strtolower()];
 
     $refColumnSql = $this->columnDefStmt($refColumnStruct);
     $curColumnSql = $this->columnDefStmt($curColumnStruct);
