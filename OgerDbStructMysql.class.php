@@ -466,8 +466,6 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function addDbStruct($refDbStruct = null) {
 
-    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
-
     $this->preProcessCheck($refDbStruct);
 
     foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
@@ -477,8 +475,10 @@ class OgerDbStructMysql extends OgerDbStruct {
       if (!$curTableStruct) {
         $this->addTableCore($refTableStruct);
       }
-      $this->addTableColumns($refTableStruct);
-      $this->addTableIndices($refTableStruct);
+      else {
+        $this->addTableColumns($refTableStruct);
+        $this->addTableIndices($refTableStruct);
+      }
     }  // eo table loop
 
 
@@ -704,8 +704,6 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function refreshDbStruct($refDbStruct = null) {
 
-    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
-
     $this->preProcessCheck($refDbStruct);
 
     // refresh current table if exits
@@ -714,7 +712,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       if ($curTableStruct) {
         $this->refreshTableCore($refTableStruct);
         $this->refreshTableColumns($refTableStruct);
-        $this->refreshTableIndizes($refTableStruct);
+        $this->refreshTableIndices($refTableStruct);
       }
     }  // eo table loop
 
@@ -744,7 +742,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->refreshTableCore($refTableStruct);
     $this->refreshTableColumns($refTableStruct);
-    $this->refreshTableIndizes($refTableStruct);
+    $this->refreshTableIndices($refTableStruct);
     $this->refreshTableForeignKeys($refTableStruct);
   }  // eo refresh table
 
@@ -807,10 +805,10 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
   /**
-  * Refresh indizes of an existing table.
+  * Refresh indices of an existing table.
   * @param $refTableStruct Array with the reference table structure.
   */
-  public function refreshTableIndizes($refTableStruct = null) {
+  public function refreshTableIndices($refTableStruct = null) {
 
     $this->preProcessCheck();
 
@@ -826,7 +824,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
     }
 
-  }  // eo refresh table indizes
+  }  // eo refresh table indices
 
 
   /**
@@ -966,12 +964,10 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 
   /**
-  * Update existing tables, columns, indices or foreign keys and add missing one.
+  * Update existing tables, columns, indices or foreign keys and add missing ones.
   * @see OgerDbStruct::updateDbStruct().
   */
   public function updateDbStruct($refDbStruct = null) {
-
-    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
     $this->preProcessCheck($refDbStruct);
 
@@ -983,27 +979,22 @@ class OgerDbStructMysql extends OgerDbStruct {
       if (!$curTableStruct) {
         $this->addTableCore($refTableStruct);
       }
-      $this->addTableColumns($refTableStruct);
-      $this->addTableIndices($refTableStruct);
-
-      // refresh existing tables, columns and indices
-      $this->refreshTableCore($refTableStruct);
-      $this->refreshTableColumns($refTableStruct);
-      $this->refreshTableIndizes($refTableStruct);
+      else {
+        // refresh existing tables, columns and indices
+        $this->refreshTableCore($refTableStruct);
+        $this->refreshTableColumns($refTableStruct);
+        $this->refreshTableIndices($refTableStruct);
+        // add mising table elements
+        $this->addTableColumns($refTableStruct);
+        $this->addTableIndices($refTableStruct);
+      }
     }  // eo table loop
 
-    // refresh existing foreign keys
+    // refresh existing foreign keys and add missing ones
     foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
-      $curTableStruct = $this->curDbStruct["TABLES"][$refTableKey];
-      if ($curTableStruct) {
-        $this->refreshTableForeignKeys($refTableStruct);
-      }
-    }  // eo refresh foreign keys
-
-    // add missing foreign keys
-    foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
+      $this->refreshTableForeignKeys($refTableStruct);
       $this->addTableForeignKeys($refTableStruct);
-    }  // eo include foreign keys
+    }  // eo refresh foreign keys
 
   }  // eo update struc
 
@@ -1023,8 +1014,6 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function reorderDbStruct($refDbStruct = null) {
 
-    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
-
     $this->preProcessCheck($refDbStruct);
 
     foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
@@ -1033,12 +1022,6 @@ class OgerDbStructMysql extends OgerDbStruct {
         $this->reorderTableColumns($refTableStruct);
       }
     }  // eo table loop
-
-    // invalidate the current database struct array because we did not update internally
-    if ($this->curDiffCount > 0) {
-      $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
-      $this->curDbStruct = null;
-    }
 
   }  // eo order db struct
 
@@ -1053,7 +1036,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $tableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
 
-    // rename lettercase - reload current table structure
+    // rename lettercase
     $this->handleTableCase($refTableStruct);
     $curTableStruct = $this->curDbStruct["TABLES"][strtolower($tableName)];
 
@@ -1071,14 +1054,14 @@ class OgerDbStructMysql extends OgerDbStruct {
     }
 
 
-    // remove all column names that are not in both tables
-    // because they do not affect the reordering
+    // remove all column names that are not in both tables from both
+    // arrays, because this columns do not affect the reordering
+    // and bubble to the tail
     foreach ((array)$refColNames as $colKey => $colStruct) {
       if (!$curColNames[$colKey]) {
         unset($refColNames[$colKey]);
       }
     }
-
     foreach ((array)$curColNames as $colKey => $colStruct) {
       if (!$refColNames[$colKey]) {
         unset($curColNames[$colKey]);
@@ -1086,19 +1069,36 @@ class OgerDbStructMysql extends OgerDbStruct {
     }
 
 
-    $tableName = $this->quoteName($tableName);
-    // use current column structure because we dont want to change the column definition but only the order
+    $tableNameQ = $this->quoteName($tableName);
     $afterColumnName = -1;
     foreach ((array)$refColNames as $colKey => $colName) {
 
       $nextCurColName = reset($curColNames);
 
       if ($colName != $nextCurColName) {
-        $columnDef = $this->columnDefStmt($refTableStruct["COLUMNS"][$colKey], $afterColumnName);
+        // use current column structure because we dont want to change the column definition but only the order
+        $columnDef = $this->columnDefStmt($curTableStruct["COLUMNS"][$colKey], $afterColumnName);
         $colNameQ = $this->quoteName($colName);
-        $stmt = "ALTER TABLE $tableName CHANGE COLUMN $colNameQ $columnDef";
+        $stmt = "ALTER TABLE $tableNameQ CHANGE COLUMN $colNameQ $columnDef";
         $this->execChange($stmt);
+
+MAYBE read struct from db???
+
+    // update current db struct array
+    $tableKey = strtolower($tablename);
+    $colKey = strtolower($columnStruct["COLUMN_NAME"]);
+    foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as &$tmpCol) {
+      if ($tmpCol["ORDINAL_POSITION"] >= $columnStruct["ORDINAL_POSITION"]) {
+        $tmpCol["ORDINAL_POSITION"]++;
       }
+    }
+    $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$colKey] = $columnStruct;
+    // reorder column struct array
+    $this->asortColumnsByOrdinalPos($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
+
+
+
+      }  // eo change order
 
       $afterColumnName = $colName;
 
@@ -1119,8 +1119,6 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @see OgerDbStruct::cleanupDbStruct().
   */
   public function cleanupDbStruct($refDbStruct = null) {
-
-    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
 
     $this->preProcessCheck();
 
@@ -1199,12 +1197,10 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function forceDbStruct($refDbStruct = null) {
 
-    $this->log(static::LOG_ULTRADEBUG, "-- *** Enter " . __METHOD__ . ".\n");
-
     $this->preProcessCheck($refDbStruct);
 
-    $this->updateDbStruct(null);
     $this->cleanupDbStruct(null);
+    $this->updateDbStruct(null);
     $this->reorderDbStruct(null);
 
   }  // eo order db struct
