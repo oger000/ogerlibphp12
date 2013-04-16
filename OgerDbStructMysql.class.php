@@ -1078,7 +1078,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
         // update current db struct array
         foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as &$tmpCol) {
-          if ($tmpCol["ORDINAL_POSITION"] > $newColPos &&
+          if ($tmpCol["ORDINAL_POSITION"] >= $newColPos &&
               $tmpCol["ORDINAL_POSITION"] < $oldColPos) {
             $tmpCol["ORDINAL_POSITION"]++;
           }
@@ -1121,56 +1121,58 @@ class OgerDbStructMysql extends OgerDbStruct {
         continue;
       }
 
-      // rename lettercase - reload current table structure
+      // rename lettercase
       $this->handleTableCase($refTableStruct);
-      $curTableStruct = $this->curDbStruct["TABLES"][strtolower($curTableStruct["TABLE_META"]["TABLE_NAME"])];
+      $tableNameQ = $this->quoteName($curTableStruct["TABLE_META"]["TABLE_NAME"]);
 
-      $tableName = $this->quoteName($curTableStruct["TABLE_META"]["TABLE_NAME"]);
       foreach ((array)$curTableStruct["FOREIGN_KEYS"] as $fkKey => $fkStruct) {
         if (!$refTableStruct["FOREIGN_KEYS"][$fkKey]) {
           $fkName = $this->quoteName($fkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"]);
           $stmt = "ALTER TABLE {$tableName} DROP CONSTRAINT {$fkName}";
           $this->execChange($stmt);
+
+          // update current db struct array
+          unset($this->curDbStruct["TABLES"][$curTableKey]["FOREIGN_KEYS"][$fkKey]);
         }
       }
     }  // table loop for foreign keys
 
 
-    // cleanup tables, columns and indices
+    // cleanup tables, indices and columns
     foreach ((array)$this->curDbStruct["TABLES"] as $curTableKey => $curTableStruct) {
 
       $refTableStruct = $this->refDbStruct["TABLES"][$curTableKey];
-      $tableName = $this->quoteName($curTableStruct["TABLE_META"]["TABLE_NAME"]);
+      $tableNameQ = $this->quoteName($curTableStruct["TABLE_META"]["TABLE_NAME"]);
 
       if (!$refTableStruct) {
-        $stmt = "DROP TABLE {$tableName}";
+        $stmt = "DROP TABLE {$tableNameQ}";
         $this->execChange($stmt);
+        // update current db struct array
+        unset($this->curDbStruct["TABLES"][$curTableKey]);
       }
       else {
         // cleanup indices
         foreach ((array)$curTableStruct["INDICES"] as $curIndexKey => $curIndexStruct) {
           if (!$refTableStruct["INDICES"][$curIndexKey]) {
             $indexName = $this->quoteName($curIndexStruct["INDEX_META"]["INDEX_NAME"]);
-            $stmt = "ALTER TABLE {$tableName} DROP INDEX {$indexName}";
+            $stmt = "ALTER TABLE {$tableNameQ} DROP INDEX {$indexName}";
             $this->execChange($stmt);
+            // update current db struct array
+            unset($this->curDbStruct["TABLES"][$curTableKey]["INDICES"][$curIndexKey]);
           }
         }
         // cleanup columns
         foreach ((array)$curTableStruct["COLUMNS"] as $curColumnKey => $curColumnStruct) {
           if (!$refTableStruct["COLUMNS"][$curColumnKey]) {
             $columnName = $this->quoteName($curColumnStruct["COLUMN_NAME"]);
-            $stmt = "ALTER TABLE {$tableName} DROP COLUMN {$columnName}";
+            $stmt = "ALTER TABLE {$tableNameQ} DROP COLUMN {$columnName}";
             $this->execChange($stmt);
+            // update current db struct array
+            unset($this->curDbStruct["TABLES"][$curTableKey]["COLUMNS"][$curColumnKey]);
           }
         }
       }  // eo existing table
     }  // eo table loop
-
-    // invalidate the current database struct array because we did not update internally
-    if ($this->curDiffCount > 0) {
-      $this->log(static::LOG_NOTICE, "-- Clear buffer for current database structure.\n");
-      $this->curDbStruct = null;
-    }
 
  }  // eo order db struct
 
