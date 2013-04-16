@@ -633,21 +633,31 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->preProcessCheck();
     $tableName = $columnStruct["TABLE_NAME"];
 
-    $stmt = "ALTER TABLE " .
-            $this->quoteName($tableName) .
-            " ADD COLUMN " .
-            $this->columnDefStmt($columnStruct, $afterColumnName);
+    $stmt = "ALTER TABLE " . $this->quoteName($tableName) .
+            " ADD COLUMN " . $this->columnDefStmt($columnStruct, $afterColumnName);
 
     $this->execChange($stmt);
 
     // update current db struct array
     $tableKey = strtolower($tablename);
     $colKey = strtolower($columnStruct["COLUMN_NAME"]);
+    if ($afterColumnName) {
+      if ($afterColumnName == -1) {  // first position
+        $afterColPos = 0;            // ordinal pos starts at 1
+      }
+      else {
+        $afterColPos = $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$colKey]["ORDINAL_POSITION"];
+      }
+    }
+    else {  // append - last ordinal pos is column count
+      $afterColPos = count($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
+    }
     foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as &$tmpCol) {
-      if ($tmpCol["ORDINAL_POSITION"] >= $columnStruct["ORDINAL_POSITION"]) {
+      if ($tmpCol["ORDINAL_POSITION"] > $afterColPos) {
         $tmpCol["ORDINAL_POSITION"]++;
       }
     }
+    $columnStruct["ORDINAL_POSITION"] = $afterColPos + 1;
     $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$colKey] = $columnStruct;
     // reorder column struct array
     $this->asortColumnsByOrdinalPos($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
@@ -874,11 +884,11 @@ class OgerDbStructMysql extends OgerDbStruct {
       $this->log(static::LOG_DEBUG, "-- Old: $curColumnSql\n" .
                                     "-- New: $refColumnSql\n");
 
-      // TODO: include AFTER | FIRST position here?
+      // TODO: include [ AFTER ... | FIRST ] position here?
       $stmt = "ALTER TABLE {$tableNameQ} CHANGE COLUMN $curColumnName $refColumnSql";
       $this->execChange($stmt);
 
-      // update current db struct array
+      // preserve ordinal position and update current db struct array
       $refColumnStruct["ORDINAL_POSITION"] = $curColumnStruct["ORDINAL_POSITION"];
       $this->curDbStruct["TABLES"][strtolower($tableName)]
                         ["COLUMNS"][strtolower($columnName)] = $refColumnStruct;
@@ -1035,76 +1045,56 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->preProcessCheck();
 
     $tableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
+    $tableKey = strtolower($tableName);
+    $tableNameQ = $this->quoteName($tableName);
 
     // rename lettercase
     $this->handleTableCase($refTableStruct);
-    $curTableStruct = $this->curDbStruct["TABLES"][strtolower($tableName)];
 
-
+    // sort reference columns by ordinal positions
     $this->asortColumnsByOrdinalPos($refTableStruct["COLUMNS"]);
-    $refColNames = array();
-    foreach ((array)$refTableStruct["COLUMNS"] as $columnKey => $columnStruct) {
-      $refColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
-    }
 
-    $this->asortColumnsByOrdinalPos($curTableStruct["COLUMNS"]);
-    $curColNames = array();
-    foreach ((array)$curTableStruct["COLUMNS"] as $columnKey => $columnStruct) {
-      $curColNames[$columnKey] = $columnStruct["COLUMN_NAME"];
-    }
-
-
-    // remove all column names that are not in both tables from both
-    // arrays, because this columns do not affect the reordering
-    // and bubble to the tail
-    foreach ((array)$refColNames as $colKey => $colStruct) {
-      if (!$curColNames[$colKey]) {
-        unset($refColNames[$colKey]);
-      }
-    }
-    foreach ((array)$curColNames as $colKey => $colStruct) {
-      if (!$refColNames[$colKey]) {
-        unset($curColNames[$colKey]);
-      }
-    }
-
-
-    $tableNameQ = $this->quoteName($tableName);
     $afterColumnName = -1;
-    foreach ((array)$refColNames as $colKey => $colName) {
+    $afterColPos = 0;            // ordinal pos starts at 1
+    foreach ((array)$refTableStruct["COLUMNS"] as $refColKey => $refColumnStruct) {
 
-      $nextCurColName = reset($curColNames);
+      $curColumnStruct = $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$refColKey];
 
-      if ($colName != $nextCurColName) {
+      // skip columns that does not exist in the current table
+      if (!$curColumnStruct) {
+        continue;
+      }
+
+      $colName = $curColumnStruct["COLUMN_NAME"];
+      $newColPos = $afterColPos + 1;
+      $oldColPos = $curColumnStruct["ORDINAL_POSITION"];
+
+      if ($oldColPos != $newColPos) {
         // use current column structure because we dont want to change the column definition but only the order
-        $columnDef = $this->columnDefStmt($curTableStruct["COLUMNS"][$colKey], $afterColumnName);
+        $columnDef = $this->columnDefStmt($curColumnStruct, $afterColumnName);
         $colNameQ = $this->quoteName($colName);
         $stmt = "ALTER TABLE $tableNameQ CHANGE COLUMN $colNameQ $columnDef";
         $this->execChange($stmt);
 
-MAYBE read struct from db???
-
-    // update current db struct array
-    $tableKey = strtolower($tablename);
-    $colKey = strtolower($columnStruct["COLUMN_NAME"]);
-    foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as &$tmpCol) {
-      if ($tmpCol["ORDINAL_POSITION"] >= $columnStruct["ORDINAL_POSITION"]) {
-        $tmpCol["ORDINAL_POSITION"]++;
-      }
-    }
-    $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$colKey] = $columnStruct;
-    // reorder column struct array
-    $this->asortColumnsByOrdinalPos($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
-
-
-
+        // update current db struct array
+        foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as &$tmpCol) {
+          if ($tmpCol["ORDINAL_POSITION"] > $newColPos &&
+              $tmpCol["ORDINAL_POSITION"] < $oldColPos) {
+            $tmpCol["ORDINAL_POSITION"]++;
+          }
+        }
+        $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$refColKey]["ORDINAL_POSITION"] = $newColPos;
       }  // eo change order
 
       $afterColumnName = $colName;
+      $afterColPos++;
 
       // remove the processed column name from the unused current column names
       unset($curColNames[$colKey]);
     }  // eo common column loop
+
+    // reorder column struct array - may be conditional only if changes happened?
+    $this->asortColumnsByOrdinalPos($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
 
   }  // eo order table columns
 
