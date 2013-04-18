@@ -27,10 +27,10 @@
   * - AUTO_INCREMENT columns needs an index. This is not forced and
   *   therefore some combinations of add/refresh/cleanup will fail.
   *   So we have to check/force an index for autoInc columns.
-  *   - addColumn -> add column without autoInc, add index, refresh with autoInc
-  *   - refreshColumn -> add index, refresh with autoInc
+  *   - addTableColumn -> add column without autoInc, add index, refresh with autoInc
+  *   - refreshTableColumn -> add index, refresh with autoInc
   *
-  *   - maybe cleanupIndex, refreshIndex
+  *   - maybe cleanupTableIndex, refreshTableIndex
   *     has to check that an index for autoInc columns remain ???
   */
 class OgerDbStructMysql extends OgerDbStruct {
@@ -648,14 +648,14 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->execChange($stmt);
 
     // update current db struct array
-    $tableKey = strtolower($tablename);
+    $tableKey = strtolower($tableName);
     $colKey = strtolower($columnStruct["COLUMN_NAME"]);
     if ($afterColumnName) {
       if ($afterColumnName == -1) {  // first position
         $afterColPos = 0;            // ordinal pos starts at 1
       }
       else {
-        $afterColPos = $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$colKey]["ORDINAL_POSITION"];
+        $afterColPos = $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][strtolower($afterColumnName)]["ORDINAL_POSITION"];
       }
     }
     else {  // append - last ordinal pos is column count
@@ -1082,6 +1082,8 @@ class OgerDbStructMysql extends OgerDbStruct {
         // use current column structure because we dont want to change the column definition but only the order
         $columnDef = $this->columnDefStmt($curColumnStruct, $afterColumnName);
         $colNameQ = $this->quoteName($colName);
+        $this->log(static::LOG_DEBUG, "-- OldColumnPos: $oldColPos\n" .
+                                      "-- NewColumnPos: $newColPos\n");
         $stmt = "ALTER TABLE $tableNameQ CHANGE COLUMN $colNameQ $columnDef";
         $this->execChange($stmt);
 
@@ -1159,7 +1161,9 @@ class OgerDbStructMysql extends OgerDbStruct {
         // update current db struct array
         unset($this->curDbStruct["TABLES"][$curTableKey]);
       }
+
       else {
+
         // cleanup indices
         foreach ((array)$curTableStruct["INDICES"] as $curIndexKey => $curIndexStruct) {
           if (!$refTableStruct["INDICES"][$curIndexKey]) {
@@ -1170,17 +1174,26 @@ class OgerDbStructMysql extends OgerDbStruct {
             unset($this->curDbStruct["TABLES"][$curTableKey]["INDICES"][$curIndexKey]);
           }
         }
+
         // cleanup columns
         foreach ((array)$curTableStruct["COLUMNS"] as $curColumnKey => $curColumnStruct) {
           if (!$refTableStruct["COLUMNS"][$curColumnKey]) {
             $columnName = $this->quoteName($curColumnStruct["COLUMN_NAME"]);
             $stmt = "ALTER TABLE {$tableNameQ} DROP COLUMN {$columnName}";
             $this->execChange($stmt);
+
             // update current db struct array
+            foreach ($this->curDbStruct["TABLES"][$curTableKey]["COLUMNS"] as &$tmpCol) {
+              if ($tmpCol["ORDINAL_POSITION"] > $curColumnStruct["ORDINAL_POSITION"]) {
+                $tmpCol["ORDINAL_POSITION"]--;
+              }
+            }
             unset($this->curDbStruct["TABLES"][$curTableKey]["COLUMNS"][$curColumnKey]);
           }
         }
+
       }  // eo existing table
+
     }  // eo table loop
 
  }  // eo order db struct
