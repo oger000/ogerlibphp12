@@ -76,6 +76,14 @@ class Oger {
 
 
 
+  /**
+  * Report a debug message.
+  * @param $msg Debug message.
+  */
+  public static function debug($msg) {
+    trigger_error($msg, E_USER_WARNING);
+  }
+
 
 
 }  // eo class

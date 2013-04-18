@@ -22,6 +22,17 @@
  * - optimize speed
  *   - read structure at once and not per table.
  */
+ /* FIXME
+  * unhandled situations:
+  * - AUTO_INCREMENT columns needs an index. This is not forced and
+  *   therefore some combinations of add/refresh/cleanup will fail.
+  *   So we have to check/force an index for autoInc columns.
+  *   - addColumn -> add column without autoInc, add index, refresh with autoInc
+  *   - refreshColumn -> add index, refresh with autoInc
+  *
+  *   - maybe cleanupIndex, refreshIndex
+  *     has to check that an index for autoInc columns remain ???
+  */
 class OgerDbStructMysql extends OgerDbStruct {
 
 
@@ -36,8 +47,6 @@ class OgerDbStructMysql extends OgerDbStruct {
 
   private $reverseMode;
   private $initialRefDbStruct;
-
-  private $curDiffCount = 0;
 
 
   /**
@@ -68,9 +77,6 @@ class OgerDbStructMysql extends OgerDbStruct {
   * @see OgerDbStruct::getDbStruct().
   */
   public function getDbStruct($opts = array()) {
-
-    // reset internal diff counter
-    $this->curDiffCount = 0;
 
     // in reverse mode return the initial reference structure
     if ($this->reverseMode) {
@@ -494,17 +500,14 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Add a table to the current database structure.
   * @param $tableStruct Array with the table structure.
   * @param $opts Optional option array. Key is option.
-  *        Valid options:<br>
-  *        - noIndices<br>
-  *        - noForeignKeys
   */
   public function addTable($tableStruct) {
 
     $this->preProcessCheck();
 
     $this->addTableCore($tableStruct);  // includes columns
-    $this->addTableIndices($tableStruct);
-    $this->addTableForeignKeys($tableStruct);
+    //$this->addTableIndices($tableStruct);
+    //$this->addTableForeignKeys($tableStruct);
   }  // eo add table
 
 
@@ -518,9 +521,10 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->preProcessCheck();
 
     $tableMeta = $tableStruct["TABLE_META"];
-    $tableName = $this->quoteName($tableMeta["TABLE_NAME"]);
+    $tableName = $tableMeta["TABLE_NAME"];
+    $tableNameQ = $this->quoteName($tableName);
 
-    $stmt = "CREATE TABLE $tableName (\n  ";
+    $stmt = "CREATE TABLE $tableNameQ (\n  ";
 
     // force column order
     $this->asortColumnsByOrdinalPos($tableStruct["COLUMNS"]);
@@ -530,6 +534,11 @@ class OgerDbStructMysql extends OgerDbStruct {
       $stmt .= $delim . $this->columnDefStmt($columnStruct);
       $delim = ",\n  ";
     }  // eo column loop
+
+    // add indices here, because auto increment columns need one
+    foreach ((array)$tableStruct["INDICES"] as $indexKey => $indexStruct) {
+      $stmt .= $delim . $this->indexDefStmt($indexStruct);
+    }  // eo index loop
 
     $stmt .= "\n)";
 
@@ -549,9 +558,9 @@ class OgerDbStructMysql extends OgerDbStruct {
     $this->execChange($stmt);
 
     // update current db struct array
-    unset($tableStruct["INDICES"]);
+    //unset($tableStruct["INDICES"]);
     unset($tableStruct["FOREIGN_KEYS"]);
-    $this->curDbStruct["TABLES"][strtolower($tableStruct["TABLE_META"]["TABLE_NAME"])] = $tableStruct;
+    $this->curDbStruct["TABLES"][strtolower($tableName)] = $tableStruct;
 
   }  // eo add table
 
@@ -990,13 +999,13 @@ class OgerDbStructMysql extends OgerDbStruct {
         $this->addTableCore($refTableStruct);
       }
       else {
+        // add mising table elements
+        $this->addTableColumns($refTableStruct);
+        $this->addTableIndices($refTableStruct);
         // refresh existing tables, columns and indices
         $this->refreshTableCore($refTableStruct);
         $this->refreshTableColumns($refTableStruct);
         $this->refreshTableIndices($refTableStruct);
-        // add mising table elements
-        $this->addTableColumns($refTableStruct);
-        $this->addTableIndices($refTableStruct);
       }
     }  // eo table loop
 
@@ -1287,23 +1296,6 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->reverseMode = true;
   }  // eo start reverse  mode
-
-
-
-  /**
-  * Prepares and executes an sql statement.
-  * @see OgerDbStruct::execChange().
-  */
-  public function execChange($stmt, $values = array()) {
-    parent::execChange($stmt, $values);
-    if (!$this->getParam("dry-run")) {
-      $this->curDiffCount++;
-    }
-  }  // eo execute stmt
-
-
-
-
 
 
 

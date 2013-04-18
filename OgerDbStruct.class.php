@@ -313,8 +313,8 @@ abstract class OgerDbStruct {
         $this->log(static::LOG_CMD, "$stmt;\n");
         $this->changeCount++;
         if (!$this->getParam("dry-run")) {
-          $pstmt = $this->conn->prepare($stmt);
           try {
+            $pstmt = $this->conn->prepare($stmt);
             $pstmt->execute();
             $this->log(static::LOG_CMD, "-- " . date("c") . " End change.\n");
           }

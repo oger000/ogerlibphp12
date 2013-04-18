@@ -139,38 +139,51 @@ class Dbw extends OgerDb {
     }
     $log = trim($structChecker->flushLog());
 
-    // write log to db struct log table if there is anything
-    // to log and if a log table exists. The columns for
-    // the struct log table are not checked so a little risk remains
-    // that writing back the log fails.
+    // report log and errors if there is anything to report
     $structTableName = "dbStructLog";
     $structTableKey = strtolower($structTableName);
     $oldDbStruct = $structChecker->getDbStruct();
-    if ((trim($log) || trim($error)) &&
-        $oldDbStruct['TABLES'][$structTableKey]) {
-      // use new struct checker and do post check
+    if ((trim($log) || trim($error))) {
+
+      // use another struct checker and do post check
       $structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
       $structChecker->setParam("log-level", OgerDbStruct::LOG_DEBUG);
       $structChecker->setParam("dry-run", true);
       $structChecker->updateDbStruct(static::$struct);
       $structChecker->reorderDbStruct();
-
       $postLog = trim($structChecker->flushLog());
-      // write log
-      $values = array(
-        "beginTime" => $beginTime,
-        "structSerial" => 0 + static::$struct['DBSTRUCT_META']['SERIAL'],
-        "structTime" => "" . static::$struct['DBSTRUCT_META']['TIME'],
-        "log" => "$log",
-        "error" => "$error",
-        "postCheck" => "$postLog",
-        "endTime" => date("c"),
-      );
-      $stmt = static::getStoreStmt("INSERT", $structTableName, $values);
-      $pstmt = static::$conn->prepare($stmt);
-      $pstmt->execute($values);
-      unset($pstmt);
+
+      // if log table exists write add full report there otherwise
+      // if there is an error throw an exception and
+      // discard log and postlog silently
+      if ($oldDbStruct['TABLES'][$structTableKey]) {
+        $values = array(
+          "beginTime" => $beginTime,
+          "structSerial" => 0 + static::$struct['DBSTRUCT_META']['SERIAL'],
+          "structTime" => "" . static::$struct['DBSTRUCT_META']['TIME'],
+          "log" => "$log",
+          "error" => "$error",
+          "postCheck" => "$postLog",
+          "endTime" => date("c"),
+        );
+        $stmt = static::getStoreStmt("INSERT", $structTableName, $values);
+        $pstmt = static::$conn->prepare($stmt);
+        $pstmt->execute($values);
+        unset($pstmt);
+      }
+      else {  // no struct log table
+        trigger_error($log, E_USER_WARNING);
+        if (trim($postLog)) {
+          trigger_error($postLog, E_USER_WARNING);
+        }
+      }  // no struct log table
+
     }  // eo write log and do postcheck
+
+    // rethrow catched errors
+    if (trim($error)) {
+      throw new Exception($error);
+    }
 
   }  // eo check struct
 
