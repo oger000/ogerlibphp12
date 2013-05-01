@@ -17,6 +17,7 @@
 * they are stored case sensitive and can be used this way if necessary.<br>
 * The structure does not contain privileges.<br>
 * We handle Collations (which in turn modifies charset).<br>
+* Cross database references are NOT handled by design.<br>
 */
 /* TODO
  * - optimize speed
@@ -295,11 +296,12 @@ class OgerDbStructMysql extends OgerDbStruct {
           ) ON DELETE RESTRICT ON UPDATE RESTRICT ;
       */
 
-    // the TABLE_CONSTRAINTS contains only constraint names,
-    // so we use KEY_COLUMN_USAGE this time
+    // the table TABLE_CONSTRAINTS contains only constraint names,
+    // so we use table KEY_COLUMN_USAGE this time
+    // we do not support cross database settings, so we removed TABLE_SCHEMA and REFERENCED_TABLE_SCHEMA from query
     $pstmt = $this->conn->prepare("
-        SELECT TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT,
-               REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+        SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT,
+               REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
           FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
           WHERE TABLE_CATALOG=:catalogName AND
                 TABLE_SCHEMA=:dbName AND
@@ -319,7 +321,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       // the meta info is taken from the last entry info which overwrites the prevous meta info
       $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"] = $fkName;
       $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["TABLE_NAME"] = $fkRecord["TABLE_NAME"];
-      $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["REFERENCED_TABLE_SCHEMA"] = $fkRecord["REFERENCED_TABLE_SCHEMA"];
+      //$struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["REFERENCED_TABLE_SCHEMA"] = $fkRecord["REFERENCED_TABLE_SCHEMA"];
       $struct["FOREIGN_KEYS"][$fkKey]["FOREIGN_KEY_META"]["REFERENCED_TABLE_NAME"] = $fkRecord["REFERENCED_TABLE_NAME"];
 
       // referenced columns
