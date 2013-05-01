@@ -145,7 +145,7 @@ class Dbw extends OgerDb {
     $oldDbStruct = $structChecker->getDbStruct();
     if ((trim($log) || trim($error))) {
 
-      // use another struct checker and do post check
+      // use another struct checker and do post check by reapply
       $structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
       $structChecker->setParam("log-level", OgerDbStruct::LOG_DEBUG);
       $structChecker->setParam("dry-run", true);
@@ -153,9 +153,17 @@ class Dbw extends OgerDb {
       $structChecker->reorderDbStruct();
       $postLog = trim($structChecker->flushLog());
 
+      // use another struct checker and do surplus check
+      $structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
+      $structChecker->setParam("log-level", OgerDbStruct::LOG_DEBUG);
+      $structChecker->setParam("dry-run", true);
+      //$structChecker->forceDbStruct(static::$struct);
+      $structChecker->cleanupDbStruct(static::$struct);
+      $surplusLog = trim($structChecker->flushLog());
+
       // if log table exists write add full report there otherwise
-      // if there is an error throw an exception and
-      // discard log and postlog silently
+      // trigger warnings for log, postlog and surpluslog
+      // Errors are handled later
       if ($oldDbStruct['TABLES'][$structTableKey]) {
         $values = array(
           "beginTime" => $beginTime,
@@ -164,6 +172,7 @@ class Dbw extends OgerDb {
           "log" => "$log",
           "error" => "$error",
           "postCheck" => "$postLog",
+          "surplus" => "$surplusLog",
           "endTime" => date("c"),
         );
         $stmt = static::getStoreStmt("INSERT", $structTableName, $values);

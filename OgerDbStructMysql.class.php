@@ -80,8 +80,11 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // in reverse mode return the initial reference structure
     if ($this->reverseMode) {
+      $this->log(static::LOG_NOTICE, "-- Get db struct in reverse mode: Return initial reference structure.\n");
       return ($this->initialRefDbStruct);
     }
+
+    $this->log(static::LOG_NOTICE, "-- Read current database structure.\n");
 
     // get structure head
     $struct = $this->getNewStructHead();
@@ -388,7 +391,6 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // read current database structure if not present
     if (!$this->curDbStruct) {
-      $this->log(static::LOG_NOTICE, "-- Read current database structure.\n");
       $this->curDbStruct = $this->getDbStruct();
     }
 
@@ -1300,6 +1302,7 @@ class OgerDbStructMysql extends OgerDbStruct {
       throw new Exception("Already in reverse mode.");
     }
 
+    $this->log(static::LOG_NOTICE, "-- Start reverse mode: Will read current database structure and use as refence structure.\n");
     $this->refDbStruct = $this->getDbStruct();
 
     $this->initialRefDbStruct = $refDbStruct;
@@ -1547,11 +1550,12 @@ class OgerDbStructMysql extends OgerDbStruct {
    * Reload the internal current database struct info.
    * Allow reload of internal current structure for external user.
    */
+   /*
   public function reloadCurDbStruct($opts = array()) {
-    $this->curDbStruct = static::getDbStruct($opts);
+    $this->curDbStruct = $this->getDbStruct($opts);
     return $this->curDbStruct;
   }  // eo invalidate current dbstruct
-
+  */
 
 
 
