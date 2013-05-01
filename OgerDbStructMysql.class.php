@@ -1125,7 +1125,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   */
   public function cleanupDbStruct($refDbStruct = null) {
 
-    $this->preProcessCheck();
+    $this->preProcessCheck($refDbStruct);
 
     // first cleanup foreign keys before we remove tables, columns or indices
     // and as sideeffect handle table lettercase

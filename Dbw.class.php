@@ -113,8 +113,13 @@ class Dbw extends OgerDb {
     $dbStructFile = "dbstruct/dbStruct.inc.php";
     if (file_exists($dbStructFile)) {
       static::$struct = include($dbStructFile);
+      if (!static::$struct) {
+        throw new Exception("No structure found in db structure file $dbStructFile.");
+        }
     }
-
+    else {
+      throw new Exception("Cannot find db structure file $dbStructFile.");
+    }
 
     return static::$conn;
   }  // eo open
