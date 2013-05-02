@@ -168,7 +168,6 @@ class DbRec {
 
 
 
-
   /**
   * Prepare select statement with data from extjs request.
   * WORK IN PROGRESS
@@ -402,7 +401,7 @@ class DbRec {
 
 
     // remove count skip areas first, because this can effect the select marker
-    $tpl = preg_replace("/\{\s*__EXT_COUNT_SKIP[__\s*\}.*?\{\s*__EXT_COUNT_SKIP]__\s*\}/", "", $tpl);
+    $tpl = preg_replace("/\{\s*__EXT_COUNT_SKIP\[__\s*\}.*?\{\s*__EXT_COUNT_SKIP\]__\s*\}/", "", $tpl);
 
 
     // SELECT
