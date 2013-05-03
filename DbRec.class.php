@@ -163,7 +163,7 @@ class DbRec {
 
 
 
-  // ##############################################
+  // #######################################################
   // new where style:
 
 
@@ -226,7 +226,13 @@ class DbRec {
           if ($direct &&  $direct != "ASC" && $direct != "DESC") {
             throw new Exception("Invalid direction '$direct' for column name '$colName' in ExtJS sort.");
           }
-          $extSort .= ($extSort ? ", " : "") . Dbw::$encNamBegin . $colName . Dbw::$encNamEnd .
+          // encode
+          $colNameOut = Dbw::$encNamBegin . $colName . Dbw::$encNamEnd;
+          // use ext_change setting if present
+          if (isset($req['__EXT_CHANGE__']['sort'][$colName])) {
+            $colNameOut = $req['__EXT_CHANGE__']['sort'][$colName];
+          }
+          $extSort .= ($extSort ? ", " : "") . $colNameOut .
                       ($direct ? " " : "") . $direct;
         }  // eo sort item loop
 
