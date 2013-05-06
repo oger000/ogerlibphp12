@@ -89,10 +89,13 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // get structure head
     $struct = $this->getNewStructHead();
+    $struct["DBSTRUCT_META"]["HOSTNAME"] = gethostname();
+    // TODO ip-number of database connection
+
 
     // get schema structure
     $pstmt = $this->conn->prepare("
-        SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME
+        SELECT SCHEMA_NAME,DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME
           FROM INFORMATION_SCHEMA.SCHEMATA
           WHERE CATALOG_NAME=:catalogName AND
                 SCHEMA_NAME=:dbName
@@ -107,7 +110,9 @@ class OgerDbStructMysql extends OgerDbStruct {
     if (count($schemaRecords) < 1) {
       throw new Exception("No schema found for database name {$this->dbName}.");
     }
+
     $struct["SCHEMA_META"] = $schemaRecords[0];
+
 
     $pstmt = $this->conn->prepare("SHOW VARIABLES LIKE '%case%'");
     $pstmt->execute();
@@ -226,9 +231,37 @@ class OgerDbStructMysql extends OgerDbStruct {
 
       // if column is not nullable but default value is NULL then
       // unset the default value and let the database decide what to do
-      if ($columnRecord["COLUMN_DEFAULT"] === null && !$columnRecord["IS_NULLABLE"]) {
+      if ($columnRecord["COLUMN_DEFAULT"] === null && $columnRecord["IS_NULLABLE"] == "NO") {
         unset($columnRecord["COLUMN_DEFAULT"]);
       }
+
+      // unset some "unused" fields
+      if (!$columnRecord["EXTRA"]) {
+        unset($columnRecord["EXTRA"]);
+      }
+      if (!$columnRecord["COLUMN_KEY"]) {
+        unset($columnRecord["COLUMN_KEY"]);
+      }
+      if ($columnRecord["CHARACTER_MAXIMUM_LENGTH"] === null) {
+        unset($columnRecord["CHARACTER_MAXIMUM_LENGTH"]);
+      }
+      if ($columnRecord["CHARACTER_OCTET_LENGTH"] === null) {
+        unset($columnRecord["CHARACTER_OCTET_LENGTH"]);
+      }
+      if ($columnRecord["CHARACTER_SET_NAME"] === null) {
+        unset($columnRecord["CHARACTER_SET_NAME"]);
+      }
+      if ($columnRecord["COLLATION_NAME"] === null) {
+        unset($columnRecord["COLLATION_NAME"]);
+      }
+      if ($columnRecord["NUMERIC_PRECISION"] === null) {
+        unset($columnRecord["NUMERIC_PRECISION"]);
+      }
+      if ($columnRecord["NUMERIC_SCALE"] === null) {
+        unset($columnRecord["NUMERIC_SCALE"]);
+      }
+
+
 
       $struct["COLUMNS"][$columnKey] = $columnRecord;
 
