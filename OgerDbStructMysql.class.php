@@ -224,6 +224,12 @@ class OgerDbStructMysql extends OgerDbStruct {
       $columnName = $columnRecord["COLUMN_NAME"];
       $columnKey = strtolower($columnName);
 
+      // if column is not nullable but default value is NULL then
+      // unset the default value and let the database decide what to do
+      if ($columnRecord["COLUMN_DEFAULT"] === null && !$columnRecord["IS_NULLABLE"]) {
+        unset($columnRecord["COLUMN_DEFAULT"]);
+      }
+
       $struct["COLUMNS"][$columnKey] = $columnRecord;
 
     }  // eo column loop
@@ -1338,6 +1344,8 @@ class OgerDbStructMysql extends OgerDbStruct {
             ($columnStruct["EXTRA"] ? " {$columnStruct["EXTRA"]}" : "");
 
     // create column default
+    // if column is not nullable but default value is NULL (or unset) then
+    // do not generate a default value and let the database decide what to do
     if (!is_null($columnStruct["COLUMN_DEFAULT"]) || $columnStruct["IS_NULLABLE"] == "YES") {
 
       $default = $columnStruct['COLUMN_DEFAULT'];
