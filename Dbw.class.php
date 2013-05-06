@@ -38,7 +38,7 @@ class Dbw extends OgerDb {
     static::$dbDef = Config::$dbDefs[$dbDefAliasId];
 
     if (!static::$dbDef) {
-      echo Extjs::errorMsg("Invalid dbDefAliasId {$dbDefAliasId}.");
+      echo OgerExtjs::errorMsg("Invalid dbDefAliasId {$dbDefAliasId}.");
       exit;
     }
 
