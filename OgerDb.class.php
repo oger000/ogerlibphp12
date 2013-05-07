@@ -216,7 +216,7 @@ class OgerDb {
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function prepSqlWithExt($tpl, &$seleVals = array(), $req = null) {
+  public static function extjSql($tpl, &$seleVals = array(), $req = null) {
 
     if ($seleVals === null) {
       $seleVals = array();
@@ -237,7 +237,7 @@ class OgerDb {
     // WHERE
     if (preg_match("/\{\s*WHERE\s.*?\}/i", $tpl, $matches)) {
       $ori = $matches[0];
-      $prep = self::prepSqlWhereWithExt(substr($ori, 1, -1), $seleVals);
+      $prep = self::extjSqlWhere(substr($ori, 1, -1), $seleVals);
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo where
 
@@ -245,7 +245,7 @@ class OgerDb {
     // ORDER BY
     if (preg_match("/\{\s*ORDER\s+BY\s.*?\}/i", $tpl, $matches)) {
       $ori = $matches[0];
-      $prep = self::prepSqlOrderByWithExt(substr($ori, 1, -1));
+      $prep = self::extjSqlOrderBy(substr($ori, 1, -1));
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo order by
 
@@ -278,7 +278,7 @@ class OgerDb {
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function prepSqlWhereWithExt($tpl, &$whereVals = array(), $req = null) {
+  public static function extjSqlWhere($tpl, &$whereVals = array(), $req = null) {
 
     if ($whereVals === null) {
       $whereVals = array();
@@ -424,7 +424,7 @@ class OgerDb {
   * WORK IN PROGRESS
   * @params $tpl: The template containing special sql
   */
-  public static function prepSqlOrderByWithExt($tpl, $req = null) {
+  public static function extjSqlOrderBy($tpl, $req = null) {
 
     if ($whereVals === null) {
       $whereVals = array();
