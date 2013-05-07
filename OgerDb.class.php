@@ -486,7 +486,7 @@ class OgerDb {
       }
 
       // encode plain column names
-      $colNameOut = Dbw::$encNamBegin . $colName . Dbw::$encNamEnd;
+      $colNameOut = static::$encNamBegin . $colName . static::$encNamEnd;
 
       // if template sorter info is present overwrite plain name
       if (array_key_exists($colName, $tplSorter)) {
