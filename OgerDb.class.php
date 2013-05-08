@@ -328,7 +328,7 @@ class OgerDb {
 
       // check if all parameter names for this part are present
       $usePart = true;
-      preg_match_all("/(:[\-\?]?[%]?[a-z_][a-z0-9_]+[%]?)/i", $part, $matches);
+      preg_match_all("/(:[\-\?\+!]?[%]?[a-z_][a-z0-9_]+[%]?)/i", $part, $matches);
       $pnams = $matches[1];
       foreach ($pnams as $key => $pnamOri) {
 
@@ -336,15 +336,26 @@ class OgerDb {
         $pnam = substr($pnamOri, 1);
 
         // detect internal commands in first char
-        $removeColon = false;
-        $removePnam = false;
+        $doRemoveColon = false;
+        $doRemovePnam = false;
+        $isRequiredParam = false;
+        $doForceAddParam = false;
+        $isZombieParam = false
 
         if (substr($pnam, 0, 1) == "-") {
-          $removeColon = true;
+          $doRemoveColon = true;
           $pnam = substr($pnam, 1);
         }
         if (substr($pnam, 0, 1) == "?") {
-          $removePnam = true;
+          $doRemovePnam = true;
+          $pnam = substr($pnam, 1);
+        }
+        if (substr($pnam, 0, 1) == "!") {
+          $isRequiredParam = true;
+          $pnam = substr($pnam, 1);
+        }
+        if (substr($pnam, 0, 1) == "+") {
+          $doForceAddParam = true;
           $pnam = substr($pnam, 1);
         }
 
@@ -368,9 +379,19 @@ class OgerDb {
         elseif (array_key_exists($pnam, $extFilter)) {
           $value = $extFilter[$pnam];
         }
-        // otherwise if pnam in request then we take this
+        // otherwise if pnam elsewhere in values (request) then we take this
         elseif (array_key_exists($pnam, $req)) {
           $value = $req[$pnam];
+        }
+        // otherwise if param is forced then add part even if pnam not present
+        // the user is responsible to provide the key and the value elsewhere
+        elseif ($doForceAddParam) {
+          $isZombieParam = true;
+        }
+        // otherwise check if it is a required param
+        // if not present till now throw an exeption
+        elseif ($isRequiredParam) {
+          throw new Exception("Required parameter '$pnam' not in value array.");
         }
         // as last resort we do not use this part
         else {
@@ -387,10 +408,10 @@ class OgerDb {
         }
 
         // write polished pnam out back to where part
-        if ($removeColon) {
+        if ($doRemoveColon) {
           $pnamOut = $pnam;
         }
-        elseif ($removePnam) {
+        elseif ($doRemovePnam) {
           $pnamOut = "";
         }
         else {
@@ -398,8 +419,9 @@ class OgerDb {
         }
         $part = str_replace($pnamOri, $pnamOut, $part);
 
-        // remember pnam and value only if varable field (:var) remains
-        if (substr($pnamOut, 0, 1) == ":") {
+        // remember pnam and value only if placeholder (:var) remains
+        // do not add zombie parameters - they come from elsewhere
+        if (substr($pnamOut, 0, 1) == ":" && !$isZombieParam) {
           $whereVals[$pnam] = $value;
         }
       }  // eo pnam loop
