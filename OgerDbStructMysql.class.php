@@ -144,7 +144,7 @@ class OgerDbStructMysql extends OgerDbStruct {
         SELECT TABLE_NAME
           FROM INFORMATION_SCHEMA.TABLES
           WHERE TABLE_CATALOG=:catalogName AND
-                TABLE_SCHEMA=:dbName
+                TABLE_SCHEMA=:dbName AND TABLE_TYPE='BASE TABLE'
         ";
     if ($opts["whereTables"]) {
       $stmt .= " AND {$opts["whereTables"]}";
@@ -160,6 +160,29 @@ class OgerDbStructMysql extends OgerDbStruct {
       $tableKey = strtolower($tableName);
       $struct["TABLES"][$tableKey] = $this->getTableStruct($tableName);
     }  // eo table loop
+
+
+
+    // get views
+    $stmt = "
+        SELECT TABLE_NAME, VIEW_DEFINITION,
+          CHECK_OPTION, IS_UPDATABLE,
+          CHARACTER_SET_CLIENT, COLLATION_CONNECTION
+          FROM INFORMATION_SCHEMA.VIEWS
+          WHERE TABLE_CATALOG=:catalogName AND
+                TABLE_SCHEMA=:dbName
+        ";
+    $pstmt = $this->conn->prepare($stmt);
+    $pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName));
+    $viewRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+
+    $viewNames = array();
+    foreach ((array)$viewRecords as $viewRecord) {
+      $viewName = $viewRecord["TABLE_NAME"];
+      $viewKey = strtolower($viewName);
+      $struct["VIEWS"][$viewKey] = $this->getViewStruct($viewRecord);
+    }  // eo view loop
 
 
     return $struct;
@@ -270,8 +293,8 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     // ---------------
     // get key info
+    // correstponding table name is STATISTICS !
 
-    // the KEY_COLUMN_USAGE misses info like unique, nullable, etc so wie use STATISTICS for now
     $pstmt = $this->conn->prepare("
         SELECT TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX AS ORDINAL_POSITION, COLUMN_NAME,	NON_UNIQUE
           FROM INFORMATION_SCHEMA.STATISTICS
@@ -404,6 +427,30 @@ class OgerDbStructMysql extends OgerDbStruct {
   }  // eo get table struc
 
 
+
+  /**
+  * Prepare structure for one view.
+  * @param $viewRecord Record with view data.
+  * @return Array with view structure.
+  */
+  public function getViewStruct($viewRecord) {
+
+    $struct = array();
+
+    // extract definition
+    $definition = $viewRecord['VIEW_DEFINITION'];
+    unset($viewRecord['VIEW_DEFINITION']);
+
+    // put all remaining into meta data
+    $struct["VIEW_META"] = $viewRecord;
+    $struct['DEFINITION'] = $definition;
+
+    return $struct;
+  }  // eo get view struc
+
+
+
+
   // ##############################################
   // DRIVER SPECIFIC HELPERS
   // ##############################################
@@ -466,7 +513,6 @@ class OgerDbStructMysql extends OgerDbStruct {
     }
 
     // check that table name only differ in lettercase
-    // TODO throw exception or write error log ?
     if (strtolower($refTableName) != strtolower($curTableName)) {
       return false;
     }
@@ -504,6 +550,47 @@ class OgerDbStructMysql extends OgerDbStruct {
   }  // eo adopt table case in structure
 
 
+  /**
+   * Handle view name lettercase changes.
+   * @param $refViewStruct Array with the reference view structure.
+   * @return True if the view was renamed because of lettercase change, false otherwise.
+  */
+  private function handleViewCase($refViewStruct) {
+
+    $this->preProcessCheck();
+
+    $refViewName = $refViewStruct["VIEW_META"]["TABLE_NAME"];
+    $viewKey = strtolower($refViewName);
+    $curViewName = $this->curDbStruct["VIEW"][$viewKey]["VIEW_META"]["TABLE_NAME"];
+
+    // if current view does not exist nothing can be renamed
+    if (!$curViewName) {
+      return false;
+    }
+
+    // check that view name only differ in lettercase
+    if (strtolower($refViewName) != strtolower($curViewName)) {
+      return false;
+    }
+
+    // difference in lettercase is only of interest on case sensitive systems
+    if ($refViewName != $curViewName &&
+        $this->curDbStruct["SCHEMA_META"]["lower_case_table_names"] != 1) {
+
+      $refViewNameQ = $this->quoteName($refViewName);
+      $curViewNameQ = $this->quoteName($curViewName);
+      $stmt = "RENAME TABLE {$curViewNameQ} TO {$refViewNameQ}";
+      $this->execChange($stmt);
+
+      // adapt lettercase on the fly
+      array_walk_recursive($this->curDbStruct["VIEW"][$viewKey], "OgerDbStructMysql::walkTableCase", $refViewName);
+
+      return true;
+    }  // eo rename lettercase
+
+    return false;
+  } // eo view name lettercase handling
+
 
   // ##############################################
   // ADD STRUCTURE
@@ -517,6 +604,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck($refDbStruct);
 
+    // table loop
     foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
 
       $refTableName = $refTableStruct["TABLE_META"]["TABLE_NAME"];
@@ -530,11 +618,18 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
     }  // eo table loop
 
-
     // add foreign keys after all tables, columns and indices has been created
     foreach ((array)$this->refDbStruct["TABLES"] as $refTableKey => $refTableStruct) {
       $this->addTableForeignKeys($refTableStruct);
     }  // eo include foreign keys
+
+    // view loop
+    foreach ((array)$this->refDbStruct["VIEWS"] as $refViewKey => $refViewStruct) {
+      $curViewStruct = $this->curDbStruct["VIEWS"][$refViewKey];
+      if (!$curViewStruct) {
+        $this->addView($refViewStruct);
+      }
+    }  // eo view loop
 
   }  // eo add db struc
 
@@ -755,6 +850,27 @@ class OgerDbStructMysql extends OgerDbStruct {
   }  // eo add foreign key
 
 
+  /**
+  * Add a view to the current database structure.
+  * @param $viewStruct Array with the view structure.
+  */
+  public function addView($viewStruct) {
+
+    $this->preProcessCheck();
+
+    $viewMeta = $viewStruct["VIEW_META"];
+    $viewName = $viewMeta["TABLE_NAME"];
+    $viewNameQ = $this->quoteName($viewName);
+
+    $stmt = "CREATE VIEW $viewNameQ AS {$viewStruct['DEFINITION']}";
+    $this->execChange($stmt);
+
+    $this->curDbStruct["VIEWS"][strtolower($viewName)] = $viewStruct;
+  }  // eo add view
+
+
+
+
 
   // ##############################################
   // REFRESH STRUCTURE
@@ -786,6 +902,15 @@ class OgerDbStructMysql extends OgerDbStruct {
       }
     }  // eo refresh foreign keys
 
+
+    // view loop
+    foreach ((array)$this->refDbStruct["VIEWS"] as $refViewKey => $refViewStruct) {
+      $curViewStruct = $this->curDbStruct["VIEWS"][$refViewKey];
+      if ($curViewStruct) {
+        $this->refreshView($refViewStruct);
+      }
+    }  // eo view loop
+
   }  // eo refresh struc
 
 
@@ -794,7 +919,7 @@ class OgerDbStructMysql extends OgerDbStruct {
   * Refresh an existing table.
   * @param $refTableStruct Array with the reference table structure.
   */
-  public function refreshTable($refTableStruct = null) {
+  public function refreshTable($refTableStruct) {
 
     $this->preProcessCheck();
 
@@ -1019,6 +1144,41 @@ class OgerDbStructMysql extends OgerDbStruct {
   }  // eo update foreign key
 
 
+  /**
+  * Refresh an existing view.
+  * @param $refViewStruct Array with the reference view structure.
+  */
+  public function refreshView($refViewStruct) {
+
+    $this->preProcessCheck();
+
+    // rename lettercase
+    $this->handleViewCase($refViewStruct);
+
+    $viewName = $refViewStruct["VIEW_META"]["TABLE_NAME"];
+    $viewKey = strtolower($viewName);
+    $curViewStruct = $this->curDbStruct["VIEWS"][$viewKey];
+
+    // simply drop and create new
+    if ($curViewStruct['DEFINITION'] != $refViewStruct['DEFINITION']) {
+/*echo "\n\n--- current:\n";
+var_export($curViewStruct['DEFINITION']);
+
+echo "\n\n--- reference:\n";
+var_export($refViewStruct['DEFINITION']);
+
+echo "\n\n--- end\n";
+throw new Exception("woher?");
+*/
+      $stmt = "DROP VIEW " . $this->quoteName($viewName);
+      $this->execChange($stmt);
+      unset($this->curDbStruct["VIEWS"][$viewKey]);
+
+      $this->addView($refViewStruct);
+    }
+  }  // eo refresh view
+
+
 
   // ##############################################
   // UPDATE STRUCTURE (ADD + REFRESH)
@@ -1058,6 +1218,18 @@ class OgerDbStructMysql extends OgerDbStruct {
       $this->addTableForeignKeys($refTableStruct);
     }  // eo refresh foreign keys
 
+
+    // view loop
+    foreach ((array)$this->refDbStruct["VIEWS"] as $refViewKey => $refViewStruct) {
+      $curViewStruct = $this->curDbStruct["VIEWS"][$refViewKey];
+      if (!$curViewStruct) {
+        $this->addView($refViewStruct);
+      }
+      else {
+        $this->refreshView($refViewStruct);
+      }
+    }  // eo view loop
+
   }  // eo update struc
 
 
@@ -1084,6 +1256,14 @@ class OgerDbStructMysql extends OgerDbStruct {
         $this->reorderTableColumns($refTableStruct);
       }
     }  // eo table loop
+
+    // reorder views by simply refresh
+    foreach ((array)$this->refDbStruct["VIEWS"] as $refViewKey => $refViewStruct) {
+      $curViewStruct = $this->curDbStruct["VIEWS"][$refViewKey];
+      if ($curViewStruct) {
+        $this->refreshView($refViewStruct);
+      }
+    }  // eo view loop
 
   }  // eo order db struct
 
@@ -1166,6 +1346,17 @@ class OgerDbStructMysql extends OgerDbStruct {
 
     $this->preProcessCheck($refDbStruct);
 
+    // view loop
+    foreach ((array)$this->curDbStruct["VIEWS"] as $curViewKey => $curViewStruct) {
+      $refViewStruct = $this->refDbStruct["VIEWS"][$curViewKey];
+      if (!$refViewStruct) {
+        $curViewName = $curViewStruct['VIEW_META']['TABLE_NAME'];
+        $stmt = "DROP VIEW " . $this->quoteName($curViewName);
+        $this->execChange($stmt);
+        unset($this->curDbStruct["VIEWS"][$curViewKey]);
+      }
+    }  // eo view loop
+
     // first cleanup foreign keys before we remove tables, columns or indices
     // and as sideeffect handle table lettercase
     foreach ((array)$this->curDbStruct["TABLES"] as $curTableKey => $curTableStruct) {
@@ -1190,7 +1381,6 @@ class OgerDbStructMysql extends OgerDbStruct {
         }
       }
     }  // table loop for foreign keys
-
 
     // cleanup tables, indices and columns
     foreach ((array)$this->curDbStruct["TABLES"] as $curTableKey => $curTableStruct) {
