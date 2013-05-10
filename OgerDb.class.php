@@ -340,7 +340,7 @@ class OgerDb {
         $doRemovePnam = false;
         $isRequiredParam = false;
         $doForceAddParam = false;
-        $isZombieParam = false
+        $isZombieParam = false;
 
         if (substr($pnam, 0, 1) == "-") {
           $doRemoveColon = true;
