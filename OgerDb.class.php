@@ -480,7 +480,6 @@ class OgerDb {
       $tplSorter[$key] = $value;
     }
 
-
     // convert sort info from json to array
     if ($req['sort'] && !is_array($req['sort'])) {
       $extItems = json_decode($req['sort'], true);
@@ -523,8 +522,8 @@ class OgerDb {
 
     // if no ext sorters are given but a default template sorter is present
     // and no sql composed, then use the template sorter default
-    if (!count($req['sort']) && $tplSorter[''] && !$sql) {
-      $sql .= ($sql ? ", " : "") . $tplSorter[''];
+    if (!count($req['sort']) && $tplSorter['@'] && !$sql) {
+      $sql .= ($sql ? ", " : "") . $tplSorter['@'];
     }
 
 
