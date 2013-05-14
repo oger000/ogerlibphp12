@@ -441,6 +441,10 @@ class OgerDbStructMysql extends OgerDbStruct {
     $definition = $viewRecord['VIEW_DEFINITION'];
     unset($viewRecord['VIEW_DEFINITION']);
 
+    // remove schema name to make transferable
+    $schemaQ = $this->quoteName($this->dbName);
+    $definition = preg_replace("/{$schemaQ}\./", "", $definition);
+
     // put all remaining into meta data
     $struct["VIEW_META"] = $viewRecord;
     $struct['DEFINITION'] = $definition;
