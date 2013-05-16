@@ -126,8 +126,8 @@ class Dbw extends OgerDb {
 
 
   /**
-  * Check database structure
-  * Log only if structure log table is present
+  * Check database structure and change if necessary
+  * Log happens only if structure log table is present
   */
   public static function checkStruct() {
 

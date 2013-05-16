@@ -15,13 +15,17 @@ class OgerDb {
   /// Enclose char at the begin.
   /// Enclose char at the begin of table and column names to encapsulate reserved words.
   /// Defaults to double quotes (") which is the ANSI SQL Standard .
-  static $encNamBegin = '"';
+  public static $encNamBegin = '"';
 
   /// Enclose char at the end.
   /// Enclose char at the end of table and column names to encapsulate reserved words.
   /// Defaults to double quotes (") which is the ANSI SQL Standard .
-  static $encNamEnd = '"';
+  public static $encNamEnd = '"';
 
+
+  /// Connection resource.
+  /// Mainly intended for setting and using in inheriting classes.
+  public static $conn;
 
 
   /**
@@ -43,7 +47,7 @@ class OgerDb {
   *                String or array without the WHERE keyword. An array is passed to whereStmt().
   * @return String with created sql command.
   */
-  public static function getStoreStmt($action, $tableName, $fields, $where = array(), $moreStmt = "") {
+  public static function getStoreStmt($action, $tableName, $fields, $where = "", $moreStmt = "") {
 
     if (Oger::isAssocArray($fields)) {
       $fields = array_keys($fields);
@@ -63,7 +67,7 @@ class OgerDb {
         $stmtSet .= ($stmtSet ? "," : '') . static::encName($field) . "=:$field";
       }
       $stmt .= "UPDATE " . static::encName($tableName) . " SET $stmtSet";
-      // only update needs where values
+      // where values only needed on update
       $stmt .= static::whereStmt($where);
       break;
     default:
@@ -130,7 +134,7 @@ class OgerDb {
   */
   public static function getStmtParamNames($stmt) {
 
-    preg_match_all("/:([a-z_][a-z0-9_]*)/i", $stmt, $matches);
+    preg_match_all("/[^a-z0-9_]:([a-z_][a-z0-9_]*)/i", $stmt, $matches);
     return $matches[1];
   }  // eo get stmt param names
 
@@ -143,7 +147,8 @@ class OgerDb {
   */
   public static function whereStmt($params, $glueOp = "AND") {
     $where = static::wherePart($params, $glueOp);
-    if (trim($where)) {
+    $chkWhere = trim($where);
+    if ($chkWhere && strtoupper(substr($chkWhere, 0, 5) != "WHERE")) {
       $where = " WHERE $where";
     }
     return $where;
@@ -161,6 +166,8 @@ class OgerDb {
   *                 If an assoziative array is given then the keys are used as parameter names.
   *                 For every parameter a "parameterName=:parameterName" stanza is created.
   *                 Currently only the "=" comperator is used.
+  *                 Or a string which will be prefixed with "WHERE" if not already present -
+  *                 otherwise returned unchanged.
   * @param string $glueOp  Optional logical operator that glues together the fields.
   *                 Defaults to "AND".
   * @return String with WHERE clause, but without the leading WHERE keyword.
@@ -191,9 +198,9 @@ class OgerDb {
   /**
   * Get value of first column of first row.
   */
-  public static function fetchValue1($conn, $sql, $seleVals = array()) {
+  public static function fetchValue1($sql, $seleVals = array()) {
 
-    $pstmt = $conn->prepare($sql);
+    $pstmt = static::$conn->prepare($sql);
     $pstmt->execute($seleVals);
     $value1 = $pstmt->fetchColumn();
     $pstmt->closeCursor();
@@ -202,6 +209,18 @@ class OgerDb {
   }  // eo get value 1
 
 
+  /**
+  * Get first row.
+  */
+  public static function fetchRow1($sql, $seleVals = array()) {
+
+    $pstmt = static::$conn->prepare($sql);
+    $pstmt->execute($seleVals);
+    $row1 = $pstmt->fetch(PDO::FETCH_ASSOC);
+    $pstmt->closeCursor();
+
+    return $row1;
+  }  // eo get value 1
 
 
 
