@@ -131,6 +131,19 @@ class Dbw extends OgerDb {
   */
   public static function checkStruct() {
 
+    // autobackup - OgerArch specific only
+    $incFile = "exportSql.php";
+    if (file_exists($incFile)) {
+      $structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
+      $structChecker->setParam("dry-run", true);
+      $structChecker->updateDbStruct(static::$struct);
+      $structChecker->reorderDbStruct();
+      if ($structChecker->changeCount) {
+        $_REQUEST['__OGER_AUTOBACKUP__'] = "dbstruct";
+        include($incFile);
+      }
+    }  // eo ogerarch specific
+
     // check struct and update
     $beginTime = date("c");
     $structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
