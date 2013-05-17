@@ -25,35 +25,12 @@
 
 /**
 * Base class for handling one record of a database table.
-* Collection of static methods.
+* Mainly a collection of static methods.
 */
 class DbRec {
 
   public static $tableName;
-
-
-  /**
-  * Constructor. Set values from associative array.
-  */
-  public function __construct($values = array()) {
-    $this->setValues($values);
-  }  // eo constructor
-
-
-
-  /**
-  * Set all values from an array to the object.
-  * @deprecated: Deprecated.
-  * @values: associative array with fieldname (key) value pairs.
-  */
-  public function setValues($values = array()) {
-    //trigger_error("Function " . __CLASS__ . "::" . __FUNCTION__ . "() is deprecated.", E_USER_DEPRECATED);
-    foreach ((array)$values as $key => $value) {
-      $this->$key = $value;
-    }
-  }  // eo set values from array
-
-
+  public static $primaryWhere;
 
   /**
   * Filter out column values from an array.
@@ -75,90 +52,63 @@ class DbRec {
 
 
   /**
-  * Get row data from db.
-  * Old style WHERE.
-  * @return False if nothing found.
-  */
-  public static function fromDb($whereVals = array()) {
-
-    $stmt = "SELECT * FROM " . static::$tableName . Dbw::whereStmt($whereVals) . " LIMIT 1";
-    $pstmt = Dbw::$conn->prepare($stmt);
-    $pstmt->execute($whereVals);
-    $row = $pstmt->fetch(PDO::FETCH_ASSOC);
-    $pstmt->closeCursor();
-
-    return $row;
-  }  // eo from db
-
-
-
-  /**
-  * Get data for input form.
-  * Old style WHERE.
-  * @return False if nothing found.
-  */
-  public static function getForForm($whereVals = array()) {
-
-    return static::fromDb($whereVals);
-  }  // eo get form data
-
-
-
-  /**
   * Write record values to db.
-  * Old style WHERE.
+  * Accepts old style WHERE values (as array) too.
   */
-  public static function toDb($saveAction, $values, $whereVals = array()) {
+  public static function store($saveAction, $values, $where = "") {
 
     $values = static::filterColValues($values);
 
-    $stmt = Dbw::getStoreStmt($saveAction, static::$tableName, $values, $whereVals);
+    $stmt = Dbw::getStoreStmt($saveAction, static::$tableName, $values, $where);
     $pstmt = Dbw::$conn->prepare($stmt);
-    $result = $pstmt->execute(array_merge((array)$whereVals, $values));
+    if (is_array($where)) {
+      $values = array_merge($where, $values);
+    }
+    $result = $pstmt->execute($where);
     $pstmt->closeCursor();
-
-  }  // eo write to db
+  }  // eo store to db
 
 
 
   /**
-  * Get max value.
-  * Old style WHERE.
+  * Get SELECT template for grid.
   */
-  public static function getMaxValue($fieldName, $whereVals = array()) {
+  public static function getSelectTpl($selectId, $whereId = null, $orderById = null) {
+    return "";
+  }  // eo get select template
 
-    $stmt = "SELECT MAX($fieldName) FROM " . static::$tableName . Dbw::whereStmt($whereVals);
-    $pstmt = Dbw::$conn->prepare($stmt);
-    $pstmt->execute($whereVals);
-    $maxVal = $pstmt->fetchColumn();
-    $pstmt->closeCursor();
-
-    return $maxVal;
-  }  // eo max value
 
 
   /**
-  * Exists record with this where values. Static version.
+  * Prepare values for grid
   */
-  public static function exists($whereVals = array()) {
-    return static::getCount($whereVals) > 0;
-  }  // eo record exists
+  public static function prep4Grid($values) {
+    return $values;
+  }  // eo prepare for grid
 
 
   /**
-  * Get count for this where values.
-  * Old style WHERE.
+  * Prepare values for form
   */
-  public static function getCount($whereVals = array()) {
+  public static function prep4Form($values) {
+    return $values;
+  }  // eo prepare for form
 
-    $stmt = "SELECT COUNT(*) FROM " . static::$tableName . Dbw::whereStmt($whereVals);
-    $pstmt = Dbw::$conn->prepare($stmt);
-    $pstmt->execute($whereVals);
-    $count = $pstmt->fetchColumn();
-    $pstmt->closeCursor();
 
-    return $count;
-  }  // eo get count
+  /**
+  * Prepare values for report
+  */
+  public static function prep4Report($values) {
+    return $values;
+  }  // eo prepare for report
+
+
+  /**
+  * Prepare values for export
+  */
+  public static function prep4Export($values) {
+    return $values;
+  }  // eo prepare for export
 
 
 
