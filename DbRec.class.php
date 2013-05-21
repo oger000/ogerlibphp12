@@ -55,11 +55,19 @@ class DbRec {
   * Write record values to db.
   * Accepts old style WHERE values (as array) too.
   */
-  public static function store($saveAction, $values, $where = "") {
+  public static function store($storeAction, $values, $where = null) {
 
     $values = static::filterColValues($values);
 
-    $stmt = Dbw::getStoreStmt($saveAction, static::$tableName, $values, $where);
+    // sanity check - do not store without where clause
+    if ($where === null) {
+      $where = static::$primaryWhere;
+    }
+    if (!$where) {
+      throw new Exception("Cannot store record without WHERE clause.");
+    }
+
+    $stmt = Dbw::getStoreStmt($storeAction, static::$tableName, $values, $where);
     $pstmt = Dbw::$conn->prepare($stmt);
     if (is_array($where)) {
       $values = array_merge($where, $values);
@@ -71,7 +79,7 @@ class DbRec {
 
 
   /**
-  * Get SELECT template for grid.
+  * Get SELECT template.
   */
   public static function getSelectTpl($selectId, $whereId = null, $orderById = null) {
     return "";
@@ -80,9 +88,18 @@ class DbRec {
 
 
   /**
+  * Prepare values for all output
+  */
+  public static function prep4AllOut($values) {
+    return $values;
+  }  // eo prepare for all output
+
+
+  /**
   * Prepare values for grid
   */
   public static function prep4Grid($values) {
+    $values = static::prep4AllOut($values);
     return $values;
   }  // eo prepare for grid
 
@@ -91,6 +108,7 @@ class DbRec {
   * Prepare values for form
   */
   public static function prep4Form($values) {
+    $values = static::prep4AllOut($values);
     return $values;
   }  // eo prepare for form
 
@@ -99,6 +117,7 @@ class DbRec {
   * Prepare values for report
   */
   public static function prep4Report($values) {
+    $values = static::prep4AllOut($values);
     return $values;
   }  // eo prepare for report
 
@@ -107,6 +126,7 @@ class DbRec {
   * Prepare values for export
   */
   public static function prep4Export($values) {
+    $values = static::prep4AllOut($values);
     return $values;
   }  // eo prepare for export
 
