@@ -140,6 +140,7 @@ class Dbw extends OgerDb {
       $structChecker->reorderDbStruct();
       if ($structChecker->changeCount) {
         $_REQUEST['__OGER_AUTOBACKUP__'] = "dbstruct";
+        $_REQUEST['__OGER_AUTOBACKUP_DBDEFALIASID__'] = static::$dbDefAliasId;
         include($incFile);
       }
     }  // eo ogerarch specific
