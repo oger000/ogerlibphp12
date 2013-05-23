@@ -78,15 +78,6 @@ class DbRec {
 
 
 
-  /**
-  * Get SELECT sql.
-  * Could be abstract, but we do not want to force implementation,
-  * so provide a stub.
-  */
-  public static function getSelectSql($selectId, $whereId = null, $orderById = null, $values = null) {
-    return "";
-  }  // eo get select template
-
 
 
 

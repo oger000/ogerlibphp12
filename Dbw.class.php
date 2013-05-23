@@ -231,6 +231,18 @@ class Dbw extends OgerDb {
 
 
 
+  /**
+  * Prepare select statement with data from extjs request.
+  * additional list delimiter replace
+  * @params $tpl: The template containing special sql
+  *         Variables are detectec by the colon (:) prefix.
+  */
+  public static function extjSql($tpl, &$seleVals = array(), $req = null) {
+    $tpl = str_replace("{xidDelimiterOut}", ExcavHelper::$xidDelimiterOut, $tpl);
+    return parent::extjSql($tpl, $seleVals, $req);
+  }  // eo prepare select statment
+
+
 
 
 
