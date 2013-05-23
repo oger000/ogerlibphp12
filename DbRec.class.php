@@ -79,56 +79,14 @@ class DbRec {
 
 
   /**
-  * Get SELECT template.
+  * Get SELECT sql.
+  * Could be abstract, but we do not want to force implementation,
+  * so provide a stub.
   */
-  public static function getSelectTpl($selectId, $whereId = null, $orderById = null) {
+  public static function getSelectSql($selectId, $whereId = null, $orderById = null, $values = null) {
     return "";
   }  // eo get select template
 
-
-
-  /**
-  * Prepare values for all output
-  */
-  public static function prep4AllOut($values) {
-    return $values;
-  }  // eo prepare for all output
-
-
-  /**
-  * Prepare values for grid
-  */
-  public static function prep4Grid($values) {
-    $values = static::prep4AllOut($values);
-    return $values;
-  }  // eo prepare for grid
-
-
-  /**
-  * Prepare values for form
-  */
-  public static function prep4Form($values) {
-    $values = static::prep4AllOut($values);
-    return $values;
-  }  // eo prepare for form
-
-
-  /**
-  * Prepare values for report
-  */
-  public static function prep4Report($values) {
-    $values = static::prep4AllOut($values);
-    return $values;
-  }  // eo prepare for report
-
-
-  /**
-  * Prepare values for export
-  */
-  public static function prep4Export($values) {
-    $values = static::prep4AllOut($values);
-    return $values;
-  }  // eo prepare for export
 
 
 

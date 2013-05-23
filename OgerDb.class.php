@@ -87,38 +87,51 @@ class OgerDb {
   * Check if parameters fit for given statement.
   * Only used for debugging to get more helpful error messages for PDO::exec errors.
   * Throws an exception if an error occurs and does nothing otherwise.
-  * @param $stmt   SQL statement.
-  * @param $params Assiziative array with key value pairs.
+  * @param $sql   SQL statement.
+  * @param $values Assiziative array with key value pairs.
   */
-  public static function checkStmtParams($stmt, $params) {
+  public static function checkStmtParams($sql, $values) {
 
-    // extract keys and remove leading ":" (if any) from params
-    $execParams = array();
-    foreach ($params as $key => $value) {
+    // extract keys and remove leading ":" (if any) from keys
+    $valKeys = array();
+    foreach ($values as $key => $value) {
       if (substr($key, 0, 1) == ":") {
         $key = substr($key, 1);
       }
-      $execParams[$key] = $key;
+      $valKeys[$key] = $value;
+    }
+
+    // check for required values
+    $tmpMsg = "";
+    $delim = "";
+    $params = static::getStmtParamNames($sql);
+    foreach ($params as $param) {
+      if (!array_key_exists($param, $valKeys)) {
+        $tmpMsg .= "$delim$param";
+        $delim = ", ";
+      }
+    }
+    if ($tmpMsg) {
+      $msg .= "No value for param: $tmpMsg. ";
     }
 
     // check for required params
-    $stmtParams = static::getStmtParamNames($stmt);
-    foreach ($stmtParams as $stmtParam) {
-      if (!array_key_exists($stmtParam, $execParams)) {
-        $msg .= "Required parameter $stmtParam in statement not found in execute parameters. \n";
+    $tmpMsg = "";
+    $delim = "";
+    $params = array_flip($params);
+    foreach ($valKeys as $key => $value) {
+      if (!array_key_exists($key, $params)) {
+        $tmpMsg .= "$delim$key";
+        $delim = ", ";
       }
     }
-
-    // check for surplus params
-    $stmtParams = array_flip($stmtParams);
-    foreach ($execParams as $execParam) {
-      if (!array_key_exists($execParam, $stmtParams)) {
-        $msg .= "Execute parameter :$execParam not found in statement. \n";
-      }
+    if ($tmpMsg) {
+      $msg .= "No param for value: $tmpMsg.";
     }
 
     // if errormessage than return or throw exception
     if ($msg) {
+      $msg = "$sql: $msg";
       throw new Exception($msg);
     }
 
@@ -196,12 +209,32 @@ class OgerDb {
 
 
   /**
+  * Check if values match statement placeholders and prepare sql.
+  */
+  public static function checkedPrepare($sql, $values = array()) {
+    static::checkStmtParams($sql, $values);
+    return static::$conn->prepare($sql);
+  }  // eo checked prepare
+
+
+  /**
+  * Check if values match statement placeholders. Prepare and execute sql.
+  */
+  public static function checkedExecute($sql, $values = array()) {
+    $pstmt = static::checkedPrepare($sql, $values);
+    $pstmt->execute($values);
+    return $pstmt;
+  }  // eo checked execute
+
+
+
+
+  /**
   * Get value of first column of first row.
   */
   public static function fetchValue1($sql, $seleVals = array()) {
 
-    $pstmt = static::$conn->prepare($sql);
-    $pstmt->execute($seleVals);
+    $pstmt = static::checkedExecute($sql, $seleVals);
     $value1 = $pstmt->fetchColumn();
     $pstmt->closeCursor();
 
@@ -214,8 +247,7 @@ class OgerDb {
   */
   public static function fetchRow1($sql, $seleVals = array()) {
 
-    $pstmt = static::$conn->prepare($sql);
-    $pstmt->execute($seleVals);
+    $pstmt = static::checkedExecute($sql, $seleVals);
     $row1 = $pstmt->fetch(PDO::FETCH_ASSOC);
     $pstmt->closeCursor();
 
