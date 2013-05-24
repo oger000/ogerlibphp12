@@ -403,36 +403,46 @@ class OgerDb {
 
       // handle grouping of conditions by parenthesis
       // check for first opening parenthesis
-      $tmpPart = trim($part);
-      if (substr($tmpPart, 0, 1) == "(") {
+      if (substr(ltrim($part), 0, 1) == "(") {
 
-        $parenthCount = 1;
-        $tmpTpl = $tmpPart;
+        $parenthCount = 0;
+        $parenthTpl = "";
+
+        // put current part back because it is called again
+        array_unshift($parts, $part);
 
         // loop till closing parenthesis
         while (count($parts)) {
           $tmpPart = trim(array_shift($parts));
 
-          // check for another opening parenthesis
+          // check for opening parenthesis
           // can be hidden after a leading NOT
           $tmpPart2 = $tmpPart;
           if (preg_match("/^\s*NOT\s+/i", $tmpPart2, $matches)) {
             $tmpPart2 = str_replace($matches[0], "", $tmpPart2);
           }
-          if (substr($tmpPart2, 0, 1) == "(") {
+
+          // increment by leading opening parenthesis - maybe there are more than one
+          $cTmp = ltrim($tmpPart2);
+          while (substr($cTmp, 0, 1) == "(") {
             $parenthCount++;
+            $cTmp = ltrim(substr($cTmp, 1));
 echo "c=$parenthCount; $tmpPart2<br>";
           }
-          // closing parenthesis
-          if (substr($tmpPart, -1) == ")") {
-            $parenthCount -= 1;
-echo "c=$parenthCount; $tmpPart<br>";
+
+          // decrement by trailing closing parenthesis - maybe there are more than one
+          $cTmp = rtrim($tmpPart2);
+          while (substr($cTmp, -1) == ")") {
+            $parenthCount--;
+            $cTmp = rtrim(substr($cTmp, 0, -1));
+echo "c=$parenthCount; $tmpPart2<br>";
           }
 
-          $tmpTpl .= " $tmpPart";
+          // add full part
+          $parenthTpl .= " $tmpPart";
 
           // final closing parenthesis reached
-          if ($parenthCount == 0) {
+          if ($parenthCount <= 0) {
             break;
           }
         }  // eo loop till closing parenthesis
@@ -444,12 +454,13 @@ echo "c=$parenthCount; $tmpPart<br>";
         }
 
         // remove leading and trailing parenthesis, otherwise endless loop
-        $tmpTpl = substr($tmpTpl, 1);
-        if (substr($tmpTpl, -1) == ")") {
-          $tmpTpl = substr($tmpTpl, 0, -1);
+        $parenthTpl = trim($parenthTpl);
+        $parenthTpl = substr($parenthTpl, 1);
+        if (substr($parenthTpl, -1) == ")") {
+          $parenthTpl = substr($parenthTpl, 0, -1);
         }
-//echo "subTpl=$tmpTpl<br>\n";
-        $part = trim(static::extjSqlWhere($tmpTpl, $whereVals, $req));
+//echo "subTpl=$parenthTpl<br>\n";
+        $part = trim(static::extjSqlWhere($parenthTpl, $whereVals, $req));
 //echo "subPart=$part<br>\n";
         // if not empty reassign parenthesis and add to sql
         if ($part) {
