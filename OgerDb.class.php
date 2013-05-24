@@ -336,30 +336,6 @@ class OgerDb {
   }  // eo select with ext
 
 
-/*
-function splittest() {
-
-
-//  $_REQUEST['x'] = "x";
-  $_REQUEST['y'] = "x";
-//  $_REQUEST['a'] = "x";
-  $_REQUEST['b'] = "x";
-//  $_REQUEST['c'] = "x";
-
-  echo "req=\n" . nl2br(var_export($_REQUEST, true)) . "<br>\n";
-
-  $tpl = "where :x=1 and :y=2 and not (:a=b or :c=yy)";
-  echo "tpl=$tpl<br>\n";
-
-  $sql = OgerDb::extjSqlWhere($tpl, $vals);
-
-  echo $sql; exit;
-
-  echo nl2br(var_export($parts, true));
-
-}  // eo splittest
-
-*/
 
   /**
   * Prepare WHERE clause with data from extjs request.
@@ -368,6 +344,8 @@ function splittest() {
   *         Variables are detectec by the colon (:) prefix.
   */
   public static function extjSqlWhere($tpl, &$whereVals = array(), $req = null) {
+
+    $tplOri = $tpl;
 
     if ($whereVals === null) {
       $whereVals = array();
@@ -408,22 +386,23 @@ function splittest() {
     while (count($parts)) {
       $part = array_shift($parts);
 
-      // detect and/or glue
+      // detect and/or glue and remember (and reset NOT keyword)
       $tmp = strtoupper(trim($part));
       if ($tmp == "OR" || $tmp == "AND") {
         $andOrGlue = $part;
+        $notKw = "";
         continue;
       }
 
-      // leading NOT is part of the and/or glue
+      // detect leading NOT and remember
       if (preg_match("/^\s*NOT\s+/i", $part, $matches)) {
-        $andOrGlue .= $matches[0];
-        $part = str_replace($matches[0], "", $part);
+        $notKw = $matches[0];
+        $part = str_replace($notKw, "", $part);
       }
 
 
       // handle grouping of conditions by parenthesis
-      // first opening parenthesis
+      // check for first opening parenthesis
       $tmpPart = trim($part);
       if (substr($tmpPart, 0, 1) == "(") {
 
@@ -433,13 +412,21 @@ function splittest() {
         // loop till closing parenthesis
         while (count($parts)) {
           $tmpPart = trim(array_shift($parts));
-          // another opening parenthesis
-          if (substr($tmpPart, 0, 1) == "(") {
+
+          // check for another opening parenthesis
+          // can be hidden after a leading NOT
+          $tmpPart2 = $tmpPart;
+          if (preg_match("/^\s*NOT\s+/i", $tmpPart2, $matches)) {
+            $tmpPart2 = str_replace($matches[0], "", $tmpPart2);
+          }
+          if (substr($tmpPart2, 0, 1) == "(") {
             $parenthCount++;
+echo "c=$parenthCount; $tmpPart2<br>";
           }
           // closing parenthesis
           if (substr($tmpPart, -1) == ")") {
             $parenthCount -= 1;
+echo "c=$parenthCount; $tmpPart<br>";
           }
 
           $tmpTpl .= " $tmpPart";
@@ -450,18 +437,24 @@ function splittest() {
           }
         }  // eo loop till closing parenthesis
 
+        // sanity check that all parenthesis are closed
+        // or better say: that detection of parenthesis worked fine
+        if ($parenthCount != 0) {
+          throw new Exception("Closing parenthesis $parenthCount required in: $tplOri.");
+        }
+
         // remove leading and trailing parenthesis, otherwise endless loop
         $tmpTpl = substr($tmpTpl, 1);
         if (substr($tmpTpl, -1) == ")") {
           $tmpTpl = substr($tmpTpl, 0, -1);
         }
-echo "subTpl=$tmpTpl<br>\n";
+//echo "subTpl=$tmpTpl<br>\n";
         $part = trim(static::extjSqlWhere($tmpTpl, $whereVals, $req));
-echo "subPart=$part<br>\n";
+//echo "subPart=$part<br>\n";
         // if not empty reassign parenthesis and add to sql
         if ($part) {
           $part = "($part)";
-          $sql .= ($sql ? $andOrGlue : "") . $part;
+          $sql .= ($sql ? $andOrGlue : "") . $notKw . $part;
         }
         // handling of current parenthesis part finished
         // continue with parts after closing parenthesis
@@ -572,7 +565,7 @@ echo "subPart=$part<br>\n";
       }  // eo pnam loop
 
       if ($usePart) {
-        $sql .= ($sql ? $andOrGlue : "") . $part;
+        $sql .= ($sql ? $andOrGlue : "") . $notKw . $part;
       }
     }  // eo part loop
 
