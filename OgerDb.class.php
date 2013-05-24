@@ -342,7 +342,7 @@ class OgerDb {
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function extjSqlWhere($tpl, &$whereVals = array(), $req = null, $filterIn = null) {
+  public static function extjSqlWhere($tpl, &$whereVals = array(), $req = null) {
 
     if ($whereVals === null) {
       $whereVals = array();
@@ -353,29 +353,22 @@ class OgerDb {
     }
 
 
-    // get extjs filter from request if not provided
-    if ($filterIn === null) {
-
-      $extFilter = array();
-      if ($req['filter'] && !is_array($req['filter'])) {
-        $extItems = json_decode($req['filter'], true);
-        $tmpArr = array();
-        foreach ((array)$extItems as $extItem) {
-          $tmpArr[$extItem['property']] = $extItem['value'];
-        }
-        $req['filter'] = $tmpArr;
+    // get extjs filter from request
+    $extFilter = array();
+    if ($req['filter'] && !is_array($req['filter'])) {
+      $extItems = json_decode($req['filter'], true);
+      $tmpArr = array();
+      foreach ((array)$extItems as $extItem) {
+        $tmpArr[$extItem['property']] = $extItem['value'];
       }
-      foreach ((array)$req['filter'] as $colName => $value) {
-        if (!static::columnCharsValid($colName)) {
-          throw new Exception("Invalid character in filter key (column name) '$colName' in ExtJS filter.");
-        }
-        $extFilter[$colName] = $value;
-      }  // eo sort item loop
-
-    }  // eo create filter
-    else {
-      $extFilter = $filterIn;
+      $req['filter'] = $tmpArr;
     }
+    foreach ((array)$req['filter'] as $colName => $value) {
+      if (!static::columnCharsValid($colName)) {
+        throw new Exception("Invalid character in filter key (column name) '$colName' in ExtJS filter.");
+      }
+      $extFilter[$colName] = $value;
+    }  // eo sort item loop
 
 
     // detect, save and remove leading where keyword
@@ -387,19 +380,63 @@ class OgerDb {
     // split at and/or boundery
     // TODO detect parenthesis
     $parts = preg_split("/(\s+OR\s+|\s+AND\s+)/i", $tpl, null, PREG_SPLIT_DELIM_CAPTURE);
-    foreach ($parts as &$part) {
+    while (count($parts)) {
+      $part = array_shift($parts);
 
       // detect and/or glue
       $tmp = strtoupper(trim($part));
       if ($tmp == "OR" || $tmp == "AND") {
-        $andOrBuffer = $part;
+        $andOrGlue = $part;
         continue;
       }
 
+      // leading NOT is part of the and/or glue
+      if (preg_match("/^\s*NOT\s+/i", $part, $matches)) {
+        $andOrGlue .= $matches[0];
+        $part = str_replace($matches[0], "", $part);
+      }
+
+
+      // handle grouping of conditions by parenthesis
+      // first opening parenthesis
+      $tmpPart = trim($part);
+      if (substr($tmpPart, 0, 1) == "(") {
+        $parenthCount = 1;
+
+        // loop till closing parenthesis
+        while (count($parts)) {
+          $tmpPart = trim(array_shift($parts));
+          // another opening parenthesis
+          if (substr($tmpPart, 0, 1) == "(") {
+            $parenthCount++;
+          }
+          // closing parenthesis
+          if (substr($tmpPart, -1) == ")") {
+            $parenthCount -= 1;
+          }
+
+          $tmpTpl .= " $tmpPart";
+
+          // final closing parenthesis reached
+          if ($parenthCount == 0) {
+            // remove leading and trailing parenthesis, otherwise endless loop
+            $tmpTpl = substr($tmpTpl, 1);
+            if (substr($tmpTpl, -1) == ")") {
+              $tmpTpl = substr($tmpTpl, 0, -1);
+            }
+            $tmpWhere = static::extjSqlWhere($tmpTpl, $whereVals, $req);
+            break;
+          }
+        }  // eo loop till closing parenthesis
+      }  // parenthesis
+
+
+//echo "part=$part<br>\n";
       // check if all parameter names for this part are present
       $usePart = true;
-      preg_match_all("/(:[\-\?\+!]?[%]?[a-z_][a-z0-9_]+[%]?)/i", $part, $matches);
+      preg_match_all("/(:[\-\?\+!]?[%]?[a-z_][a-z0-9_]*[%]?)/i", $part, $matches);
       $pnams = $matches[1];
+//echo "pnams=";var_export($pnams); echo "<br>";
       foreach ($pnams as $key => $pnamOri) {
 
         // remove leading colon
@@ -497,7 +534,7 @@ class OgerDb {
       }  // eo pnam loop
 
       if ($usePart) {
-        $sql .= ($sql ? $andOrBuffer : "") . $part;
+        $sql .= ($sql ? $andOrGlue : "") . $part;
       }
     }  // eo part loop
 
