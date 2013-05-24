@@ -146,7 +146,6 @@ class OgerDb {
   * @return An array with all named parameters (placeholders) for a sql statement.
   */
   public static function getStmtParamNames($stmt) {
-
     preg_match_all("/[^a-z0-9_]:([a-z_][a-z0-9_]*)/i", $stmt, $matches);
     return $matches[1];
   }  // eo get stmt param names
@@ -256,6 +255,20 @@ class OgerDb {
 
 
 
+  /**
+  * Check for valid characters in column names (driver specific).
+  */
+  public static function columnCharsValid($colName) {
+    if (preg_match("/^([a-z_][a-z0-9_]*)$/i", $colName)) {
+      return true;
+    }
+    return false;
+  }  // eo valid column chars
+
+
+
+
+
   // #######################################################
   // PREPARE SQL STATEMENT WITH VALUES FROM EXTJS REQUEST
 
@@ -329,7 +342,7 @@ class OgerDb {
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function extjSqlWhere($tpl, &$whereVals = array(), $req = null) {
+  public static function extjSqlWhere($tpl, &$whereVals = array(), $req = null, $filterIn = null) {
 
     if ($whereVals === null) {
       $whereVals = array();
@@ -340,30 +353,36 @@ class OgerDb {
     }
 
 
-    // get extjs filter from request
-    $extFilter = array();
-    if ($req['filter'] && !is_array($req['filter'])) {
-      $extItems = json_decode($req['filter'], true);
-      $tmpArr = array();
-      foreach ((array)$extItems as $extItem) {
-        $tmpArr[$extItem['property']] = $extItem['value'];
+    // get extjs filter from request if not provided
+    if ($filterIn === null) {
+
+      $extFilter = array();
+      if ($req['filter'] && !is_array($req['filter'])) {
+        $extItems = json_decode($req['filter'], true);
+        $tmpArr = array();
+        foreach ((array)$extItems as $extItem) {
+          $tmpArr[$extItem['property']] = $extItem['value'];
+        }
+        $req['filter'] = $tmpArr;
       }
-      $req['filter'] = $tmpArr;
+      foreach ((array)$req['filter'] as $colName => $value) {
+        if (!static::columnCharsValid($colName)) {
+          throw new Exception("Invalid character in filter key (column name) '$colName' in ExtJS filter.");
+        }
+        $extFilter[$colName] = $value;
+      }  // eo sort item loop
+
+    }  // eo create filter
+    else {
+      $extFilter = $filterIn;
     }
-    foreach ((array)$req['filter'] as $colName => $value) {
-      // security checks
-      if (!preg_match("/^([a-z_][a-z0-9_]*)$/i", $colName)) {
-        throw new Exception("Invalid character in filter key (column name) '$colName' in ExtJS filter.");
-      }
-      $extFilter[$colName] = $value;
-    }  // eo sort item loop
 
 
     // detect, save and remove leading where keyword
     if (preg_match("/^\s*WHERE\s+/i", $tpl, $matches)) {
       $kw = $matches[0];
       $tpl = str_replace($kw, "", $tpl);
-    }
+    }  // keyword
 
     // split at and/or boundery
     // TODO detect parenthesis
@@ -543,8 +562,7 @@ class OgerDb {
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {
-      // security checks
-      if (!preg_match('/^([a-z_][a-z0-9_]*)$/i', $colName)) {
+      if (!static::columnCharsValid($colName)) {
         throw new Exception("Invalid character in sort key (column name) '$colName' in ExtJS sort.");
       }
       if ($direct &&  $direct != "ASC" && $direct != "DESC" && $direct != "") {
