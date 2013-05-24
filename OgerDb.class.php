@@ -336,6 +336,31 @@ class OgerDb {
   }  // eo select with ext
 
 
+/*
+function splittest() {
+
+
+//  $_REQUEST['x'] = "x";
+  $_REQUEST['y'] = "x";
+//  $_REQUEST['a'] = "x";
+  $_REQUEST['b'] = "x";
+//  $_REQUEST['c'] = "x";
+
+  echo "req=\n" . nl2br(var_export($_REQUEST, true)) . "<br>\n";
+
+  $tpl = "where :x=1 and :y=2 and not (:a=b or :c=yy)";
+  echo "tpl=$tpl<br>\n";
+
+  $sql = OgerDb::extjSqlWhere($tpl, $vals);
+
+  echo $sql; exit;
+
+  echo nl2br(var_export($parts, true));
+
+}  // eo splittest
+
+*/
+
   /**
   * Prepare WHERE clause with data from extjs request.
   * WORK IN PROGRESS
@@ -401,7 +426,9 @@ class OgerDb {
       // first opening parenthesis
       $tmpPart = trim($part);
       if (substr($tmpPart, 0, 1) == "(") {
+
         $parenthCount = 1;
+        $tmpTpl = $tmpPart;
 
         // loop till closing parenthesis
         while (count($parts)) {
@@ -419,15 +446,26 @@ class OgerDb {
 
           // final closing parenthesis reached
           if ($parenthCount == 0) {
-            // remove leading and trailing parenthesis, otherwise endless loop
-            $tmpTpl = substr($tmpTpl, 1);
-            if (substr($tmpTpl, -1) == ")") {
-              $tmpTpl = substr($tmpTpl, 0, -1);
-            }
-            $tmpWhere = static::extjSqlWhere($tmpTpl, $whereVals, $req);
             break;
           }
         }  // eo loop till closing parenthesis
+
+        // remove leading and trailing parenthesis, otherwise endless loop
+        $tmpTpl = substr($tmpTpl, 1);
+        if (substr($tmpTpl, -1) == ")") {
+          $tmpTpl = substr($tmpTpl, 0, -1);
+        }
+echo "subTpl=$tmpTpl<br>\n";
+        $part = trim(static::extjSqlWhere($tmpTpl, $whereVals, $req));
+echo "subPart=$part<br>\n";
+        // if not empty reassign parenthesis and add to sql
+        if ($part) {
+          $part = "($part)";
+          $sql .= ($sql ? $andOrGlue : "") . $part;
+        }
+        // handling of current parenthesis part finished
+        // continue with parts after closing parenthesis
+        continue;
       }  // parenthesis
 
 
