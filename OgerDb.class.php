@@ -178,8 +178,7 @@ class OgerDb {
   *                 If an assoziative array is given then the keys are used as parameter names.
   *                 For every parameter a "parameterName=:parameterName" stanza is created.
   *                 Currently only the "=" comperator is used.
-  *                 Or a string which will be prefixed with "WHERE" if not already present -
-  *                 otherwise returned unchanged.
+  *                 If params is a string it will be returned unchanged.
   * @param string $glueOp  Optional logical operator that glues together the fields.
   *                 Defaults to "AND".
   * @return String with WHERE clause, but without the leading WHERE keyword.
@@ -357,21 +356,14 @@ class OgerDb {
 
 
     // get extjs filter from request
+    $req['filter'] = OgerExtjs::getFilter(null, $req);
     $extFilter = array();
-    if ($req['filter'] && !is_array($req['filter'])) {
-      $extItems = json_decode($req['filter'], true);
-      $tmpArr = array();
-      foreach ((array)$extItems as $extItem) {
-        $tmpArr[$extItem['property']] = $extItem['value'];
-      }
-      $req['filter'] = $tmpArr;
-    }
     foreach ((array)$req['filter'] as $colName => $value) {
       if (!static::columnCharsValid($colName)) {
         throw new Exception("Invalid character in filter key (column name) '$colName' in ExtJS filter.");
       }
       $extFilter[$colName] = $value;
-    }  // eo sort item loop
+    }  // eo filter item loop
 
 
     // detect, save and remove leading where keyword
@@ -630,14 +622,7 @@ echo "c=$parenthCount; $tmpPart2<br>";
     }
 
     // convert sort info from json to array
-    if ($req['sort'] && !is_array($req['sort'])) {
-      $extItems = json_decode($req['sort'], true);
-      $tmpArr = array();
-      foreach ((array)$extItems as $extItem) {
-        $tmpArr[$extItem['property']] = $extItem['direction'];
-      }
-      $req['sort'] = $tmpArr;
-    }
+    $req['sort'] = OgerExtjs::getSort(null, $req);
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {

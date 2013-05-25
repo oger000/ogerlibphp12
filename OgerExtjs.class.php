@@ -81,5 +81,79 @@ class OgerExtjs {
 
 
 
+  /**
+  * Get filter data from extjs request.
+  * @params $filterName: Name of the filter.
+  *         $req: Request array.
+  */
+  public static function getFilter($filterName = null, $req = null) {
+
+    if ($filterName === null) {
+      $filterName = "filter";
+    }
+    if ($req === null) {
+      $req = $_REQUEST;
+    }
+
+    // no filter or filter is empty
+    if (!$req[$filterName]) {
+      return array();
+    }
+
+    // filter is already an array
+    if (is_array($req[$filterName])) {
+      return $req[$filterName];
+    }
+
+    // prepare filter
+    $filter = array();
+    $items = json_decode($req[$filterName], true);
+    foreach ((array)$items as $item) {
+      $filter[$item['property']] = $item['value'];
+    }
+
+    return $filter;
+  }  // eo get ext filter
+
+
+  /**
+  * Get sort data from extjs request.
+  * @params $filterName: Name of the filter.
+  *         $req: Request array.
+  */
+  public static function getSort($sortName = null, $req = null) {
+
+    if ($sortName === null) {
+      $sortName = "sort";
+    }
+    if ($req === null) {
+      $req = $_REQUEST;
+    }
+
+    // no sort or sort is empty
+    if (!$req[$sortName]) {
+      return array();
+    }
+
+    // sort is already an array
+    if (is_array($req[$sortName])) {
+      return $req[$sortName];
+    }
+
+    // prepare sort
+    $sort = array();
+    $items = json_decode($req[$sortName], true);
+    foreach ((array)$items as $item) {
+      $sort[$item['property']] = $item['direction'];
+    }
+
+    return $sort;
+  }  // eo get ext sort
+
+
+
+
+
+
 }  // end of class
 ?>
