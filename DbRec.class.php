@@ -59,13 +59,15 @@ class DbRec {
 
     $values = static::filterColValues($values);
 
-    // sanity check - do not store without where clause
-    if ($where === null) {
-      $where = static::$primaryWhere;
-    }
-    if (!$where) {
-      throw new Exception("Cannot store record without WHERE clause.");
-    }
+    // sanity check - do not update without WHERE clause
+    if ($storeAction == "UPDATE") {
+      if (!$where) {
+        $where = static::$primaryWhere;
+      }
+      if (!$where) {
+        throw new Exception("Update without WHERE clause refused.");
+      }
+    }  // eo update WHERE check
 
     $stmt = Dbw::getStoreStmt($storeAction, static::$tableName, $values, $where);
     $pstmt = Dbw::$conn->prepare($stmt);

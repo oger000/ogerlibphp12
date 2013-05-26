@@ -300,7 +300,7 @@ class OgerDb {
     // WHERE
     if (preg_match("/\{\s*WHERE\s.*?\}/i", $tpl, $matches)) {
       $ori = $matches[0];
-      $prep = self::extjSqlWhere(substr($ori, 1, -1), $seleVals);
+      $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals);
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo where
 
@@ -308,7 +308,7 @@ class OgerDb {
     // ORDER BY
     if (preg_match("/\{\s*ORDER\s+BY\s.*?\}/i", $tpl, $matches)) {
       $ori = $matches[0];
-      $prep = self::extjSqlOrderBy(substr($ori, 1, -1));
+      $prep = static::extjSqlOrderBy(substr($ori, 1, -1));
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo order by
 
@@ -316,17 +316,7 @@ class OgerDb {
     // LIMIT
     $ori = "__EXT_LIMIT__";
     if (strpos($tpl, $ori) !== false) {
-      $prep = "";
-      if (array_key_exists("limit", $req) && is_numeric($req['limit'])) {
-        $prep .= intval($req['limit']);
-      }
-      // start only makes sense if limit is in prep
-      if ($prep && array_key_exists("start", $req) && is_numeric($req['start'])) {
-        $prep = "" . intval($req['start']) . ",$prep";
-      }
-      if ($prep) {
-        $prep = "LIMIT $prep";
-      }
+      $prep = static::extjSqlLimit();
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo limit
 
@@ -356,7 +346,7 @@ class OgerDb {
 
 
     // get extjs filter from request
-    $req['filter'] = OgerExtjs::getFilter(null, $req);
+    $req['filter'] = OgerExtjs::getStoreFilter(null, $req);
     $extFilter = array();
     foreach ((array)$req['filter'] as $colName => $value) {
       if (!static::columnCharsValid($colName)) {
@@ -419,7 +409,7 @@ class OgerDb {
           while (substr($cTmp, 0, 1) == "(") {
             $parenthCount++;
             $cTmp = ltrim(substr($cTmp, 1));
-echo "c=$parenthCount; $tmpPart2<br>";
+//echo "c=$parenthCount; $tmpPart2<br>";
           }
 
           // decrement by trailing closing parenthesis - maybe there are more than one
@@ -427,7 +417,7 @@ echo "c=$parenthCount; $tmpPart2<br>";
           while (substr($cTmp, -1) == ")") {
             $parenthCount--;
             $cTmp = rtrim(substr($cTmp, 0, -1));
-echo "c=$parenthCount; $tmpPart2<br>";
+//echo "c=$parenthCount; $tmpPart2<br>";
           }
 
           // add full part
@@ -622,7 +612,7 @@ echo "c=$parenthCount; $tmpPart2<br>";
     }
 
     // convert sort info from json to array
-    $req['sort'] = OgerExtjs::getSort(null, $req);
+    $req['sort'] = OgerExtjs::getStoreSort(null, $req);
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {
@@ -671,6 +661,23 @@ echo "c=$parenthCount; $tmpPart2<br>";
 
 
 
+  /**
+  * Prepare LIMIT clause with data from extjs request.
+  * Convenience method to complete the exjSql family.
+  */
+  public static function extjSqlLimit($req = null) {
+
+    if ($req === null) {
+      $req = $_REQUEST;
+    }
+
+    $sql = OgerExtjs::getStoreLimit(null, null, $req);
+    if (strlen($sql) > 0) {
+      $sql = "LIMIT $sql";
+    }
+
+    return $sql;
+  }  // eo
 
 
 }  // eo class

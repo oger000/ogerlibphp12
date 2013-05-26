@@ -86,7 +86,7 @@ class OgerExtjs {
   * @params $filterName: Name of the filter.
   *         $req: Request array.
   */
-  public static function getFilter($filterName = null, $req = null) {
+  public static function getStoreFilter($filterName = null, $req = null) {
 
     if ($filterName === null) {
       $filterName = "filter";
@@ -118,10 +118,10 @@ class OgerExtjs {
 
   /**
   * Get sort data from extjs request.
-  * @params $filterName: Name of the filter.
+  * @params $sortName: Name of the sort variable.
   *         $req: Request array.
   */
-  public static function getSort($sortName = null, $req = null) {
+  public static function getStoreSort($sortName = null, $req = null) {
 
     if ($sortName === null) {
       $sortName = "sort";
@@ -151,8 +151,36 @@ class OgerExtjs {
   }  // eo get ext sort
 
 
+  /**
+  * Get sql limit.
+  * @params $limitName: Name of the limit variable.
+  *         $req: Request array.
+  */
+  public static function getStoreLimit($limitName = null, $startName = null, $req = null) {
 
+    if ($limitName === null) {
+      $limitName = "limit";
+    }
+    if ($startName === null) {
+      $startName = "limit";
+    }
+    if ($req === null) {
+      $req = $_REQUEST;
+    }
 
+   // no limit or limit is empty or non-numeric
+    if (!$req[$limitName] || !is_numeric($req[$limitName])) {
+      return "";
+    }
+    $limit = "" . intval($req[$limitName]);
+
+    // start only makes sense if limit is in prep
+    if (array_key_exists($startName, $req) && is_numeric($req[$startName])) {
+      $limit = "" . intval($req[$startName]) . ",$limit";
+    }
+
+    return $limit;
+  }  // eo get limit
 
 
 }  // end of class
