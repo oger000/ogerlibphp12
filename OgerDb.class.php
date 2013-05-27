@@ -356,6 +356,15 @@ class OgerDb {
     }  // eo filter item loop
 
 
+    // detect and remove enclosing {}
+    $tpl = trim($tpl);
+    if (substr($tpl, 0, 1) == "{") {
+      $tpl = substr($tpl, 1);
+    }
+    if (substr($tpl, -1) == "}") {
+      $tpl = substr($tpl, 0, -1);
+    }
+
     // detect, save and remove leading where keyword
     if (preg_match("/^\s*WHERE\s+/i", $tpl, $matches)) {
       $kw = $matches[0];
@@ -531,10 +540,10 @@ class OgerDb {
         }  // check if pnames present
 
         // apply prefix and postfix to value
-        if (substr($value, 0, 1) != $valPre) {
+        if ($valPre && substr($value, 0, 1) != $valPre) {
           $value = $valPre . $value;
         }
-        if (substr($value, -1) != $valPost) {
+        if ($valPost && substr($value, -1) != $valPost) {
           $value = $value . $valPost;
         }
 

@@ -162,7 +162,7 @@ class OgerExtjs {
       $limitName = "limit";
     }
     if ($startName === null) {
-      $startName = "limit";
+      $startName = "start";
     }
     if ($req === null) {
       $req = $_REQUEST;
