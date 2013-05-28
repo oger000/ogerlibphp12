@@ -357,13 +357,7 @@ class OgerDb {
 
 
     // detect and remove enclosing {}
-    $tpl = trim($tpl);
-    if (substr($tpl, 0, 1) == "{") {
-      $tpl = substr($tpl, 1);
-    }
-    if (substr($tpl, -1) == "}") {
-      $tpl = substr($tpl, 0, -1);
-    }
+    $tpl = self::extjSqlStrip($tpl);
 
     // detect, save and remove leading where keyword
     if (preg_match("/^\s*WHERE\s+/i", $tpl, $matches)) {
@@ -566,6 +560,12 @@ class OgerDb {
         }
       }  // eo pnam loop
 
+      // do not use empty parts
+      if (!trim($part)) {
+        $usePart = false;
+      }
+
+      // use part
       if ($usePart) {
         $sql .= ($sql ? $andOrGlue : "") . $notKw . $part;
       }
@@ -683,6 +683,27 @@ class OgerDb {
     $sql = OgerExtjs::getStoreLimit(null, null, $req);
     if (strlen($sql) > 0) {
       $sql = "LIMIT $sql";
+    }
+
+    return $sql;
+  }  // eo
+
+
+
+  /**
+  * Strip opening and closing curly brackets.
+  * Preserve leading and trailing spaces.
+  */
+  public static function extjSqlStrip($sql) {
+
+    if (substr(ltrim($sql), 0, 1) == "{") {
+      $pos = strpos($sql, "{");
+      $sql = substr($sql, 0, $pos) . substr($sql, $pos + 1);
+    }
+
+    if (substr(rtrim($sql), -1) == "}") {
+      $pos = strrpos($sql, "}");
+      $sql = substr($sql, 0, $pos) . substr($sql, $pos + 1);
     }
 
     return $sql;

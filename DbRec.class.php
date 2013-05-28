@@ -81,6 +81,82 @@ class DbRec {
 
 
 
+  /**
+  * Get full sql template.
+  */
+  public static function getSqlTpl($selectTarget, $whereTarget = null, $orderTarget = null) {
+
+    $tpl = static::getSelectTpl($selectTarget);
+
+    if ($whereTarget) {
+      $whereTarget = ltrim($whereTarget);
+      // a prefix of "=" returns the where target unchanged (prefix stripped)
+      if (substr($whereTarget, 0, 1) == "=") {
+        $tpl .= " " . substr($whereTarget, 1);
+      }
+      else {
+        $tpl .= " " . static::getWhereTpl($whereTarget, $whereVals);
+      }
+    }  // where
+
+    if ($orderTarget) {
+      $tpl .= " " . static::getOrderTpl($orderTarget);
+    }
+
+    return $tpl;
+  }  // eo get sql tpl
+
+
+  /**
+  * Get select template.
+  */
+  public static function getSelectTpl($target) {
+
+    $listDelim = ExcavHelper::$xidDelimiterOut;
+
+    if ($target == "DEFAULT") {
+      return "SELECT * FROM archFind ";
+    }
+
+    if ($target == "GRID" || $target == "FORM") {
+      return
+        "SELECT *," .
+        "  (SELECT group_concat(stratumId ORDER BY stratumid SEPARATOR '$listDelim') " .
+        "   FROM stratumToArchFind AS stToAf " .
+        "   WHERE stToAf.excavId=archFind.excavId AND stToAf.archFindId=archFind.archFindId " .
+        "  ) AS stratumIdList " .
+        "FROM archFind ";
+    }
+
+  }  // get select
+
+
+  /**
+  * Get where sql and prepare sele vals.
+  */
+  /*
+  public static function getExtjSqlWhere($target, &$seleVals = array()) {
+    $where = static::getWhereTpl($target);
+    $where = Dbw::extjSqlWhere($where, $seleVals);
+    return $where;
+  }  // eo get extjs sql where
+  */
+
+  /**
+  * Get where template.
+  */
+  public static function getWhereTpl($target) {
+  }  // eo where tpl
+
+
+  /**
+  * Get order-by template.
+  */
+  public static function getOrderTpl($target) {
+  }  // eo order by tpl
+
+
+
 
 
 
