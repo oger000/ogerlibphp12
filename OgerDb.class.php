@@ -314,7 +314,7 @@ class OgerDb {
 
 
     // LIMIT
-    $ori = "__EXT_LIMIT__";
+    $ori = "__EXTJS_LIMIT__";
     if (strpos($tpl, $ori) !== false) {
       $prep = static::extjSqlLimit();
       $tpl = str_replace($ori, $prep, $tpl);

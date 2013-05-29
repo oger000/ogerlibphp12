@@ -88,7 +88,7 @@ class OgerExtjSqlTpl {
 
 
     // LIMIT
-    $ori = "__EXT_LIMIT__";
+    $ori = "__EXTJS_LIMIT__";
     if (strpos($tpl, $ori) !== false) {
       $prep = "";
       if (array_key_exists("limit", $req) && is_numeric($req['limit'])) {

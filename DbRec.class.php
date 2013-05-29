@@ -109,30 +109,15 @@ class DbRec {
 
   /**
   * Get select template.
+  * Empty tub to make getSqlTpl() work in child classes.
   */
   public static function getSelectTpl($target) {
-
-    $listDelim = ExcavHelper::$xidDelimiterOut;
-
-    if ($target == "DEFAULT") {
-      return "SELECT * FROM archFind ";
-    }
-
-    if ($target == "GRID" || $target == "FORM") {
-      return
-        "SELECT *," .
-        "  (SELECT group_concat(stratumId ORDER BY stratumid SEPARATOR '$listDelim') " .
-        "   FROM stratumToArchFind AS stToAf " .
-        "   WHERE stToAf.excavId=archFind.excavId AND stToAf.archFindId=archFind.archFindId " .
-        "  ) AS stratumIdList " .
-        "FROM archFind ";
-    }
-
-  }  // get select
+  }  // get select template
 
 
   /**
   * Get where sql and prepare sele vals.
+  * Empty tub to make getSqlTpl() work in child classes.
   */
   /*
   public static function getExtjSqlWhere($target, &$seleVals = array()) {
@@ -144,16 +129,18 @@ class DbRec {
 
   /**
   * Get where template.
+  * Empty tub to make getSqlTpl() work in child classes.
   */
   public static function getWhereTpl($target) {
-  }  // eo where tpl
+  }  // eo where template
 
 
   /**
   * Get order-by template.
+  * Empty tub to make getSqlTpl() work in child classes.
   */
   public static function getOrderTpl($target) {
-  }  // eo order by tpl
+  }  // eo order by template
 
 
 
