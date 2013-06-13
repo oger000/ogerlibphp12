@@ -144,6 +144,20 @@ class DbRec {
 
 
 
+  /**
+  * Prepare date fields for output.
+  */
+  public static function prepDateOut($values, $dateFieldNames) {
+
+    foreach ($dateFieldNames as $fieldName) {
+      if (substr($values[$fieldName], 0, 10) == '0000-00-00') {
+        $values[$fieldName] = '';
+      }
+    }
+
+    return $values;
+  }  // eo order by template
+
 
 
 

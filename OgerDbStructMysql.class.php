@@ -16,8 +16,10 @@
 * name in different areas. Though the names are searched in a case independent way
 * they are stored case sensitive and can be used this way if necessary.<br>
 * The structure does not contain privileges.<br>
-* We handle Collations (which in turn modifies charset).<br>
+* Collations are handled (which in turn modifies charset).<br>
 * Cross database references are NOT handled by design.<br>
+* Handling of views is experimental and does NOT work well beetween linux and windows.<br>
+*
 */
 /* TODO
  * - optimize speed
