@@ -345,6 +345,7 @@ class OgerDb {
     }
 
 
+//echo "tpl=$tpl<br>\n";
     // get extjs filter from request
     $req['filter'] = OgerExtjs::getStoreFilter(null, $req);
     $extFilter = array();
@@ -460,10 +461,11 @@ class OgerDb {
 
 //echo "part=$part<br>\n";
       // check if all parameter names for this part are present
-      $usePart = true;
-      preg_match_all("/(:[\-\?\+!]?[%]?[a-z_][a-z0-9_]*[%]?)/i", $part, $matches);
+      $usePart = false;
+      preg_match_all("/(:[\-\?\+!>]*[%]?[a-z_][a-z0-9_]*[%]?)/i", $part, $matches);
       $pnams = $matches[1];
 //echo "pnams=";var_export($pnams); echo "<br>";
+
       foreach ($pnams as $key => $pnamOri) {
 
         // remove leading colon
@@ -475,23 +477,47 @@ class OgerDb {
         $isRequiredParam = false;
         $doForceAddParam = false;
         $isZombieParam = false;
+        $valueRequired = false;
+        //$trimmedValueRequired = false;
 
-        if (substr($pnam, 0, 1) == "-") {
-          $doRemoveColon = true;
-          $pnam = substr($pnam, 1);
-        }
-        if (substr($pnam, 0, 1) == "?") {
-          $doRemovePnam = true;
-          $pnam = substr($pnam, 1);
-        }
-        if (substr($pnam, 0, 1) == "!") {
-          $isRequiredParam = true;
-          $pnam = substr($pnam, 1);
-        }
-        if (substr($pnam, 0, 1) == "+") {
-          $doForceAddParam = true;
-          $pnam = substr($pnam, 1);
-        }
+        // loop over internal command prefix
+        $intCmdLoop = true;
+        while ($intCmdLoop) {
+
+          // remove colon in final where clause
+          if (substr($pnam, 0, 1) == "-") {
+            $doRemoveColon = true;
+            $pnam = substr($pnam, 1);
+            continue;
+          }
+          // test if pnam exists and remove pnam afterwards
+          if (substr($pnam, 0, 1) == "?") {
+            $doRemovePnam = true;
+            $pnam = substr($pnam, 1);
+            continue;
+          }
+          // throw exption if pnam does not exist
+          if (substr($pnam, 0, 1) == "!") {
+            $isRequiredParam = true;
+            $pnam = substr($pnam, 1);
+            continue;
+          }
+          // add pnam even if not exits in value arra
+          if (substr($pnam, 0, 1) == "+") {
+            $doForceAddParam = true;
+            $pnam = substr($pnam, 1);
+            continue;
+          }
+          // use only if not empty (untrimmed)
+          if (substr($pnam, 0, 1) == ">") {
+            $valueRequired = true;
+            $pnam = substr($pnam, 1);
+            continue;
+          }
+
+          $intCmdLoop = false;
+        }  // eo internal cmd check
+//echo "search for $pnam<br>\n";
 
         // separate special sql prefix and postfix (e.g. %var%)
         $valPre = "";
@@ -505,33 +531,50 @@ class OgerDb {
           $pnam = substr($pnam, 0, -1);
         }
 
+        // check if key exists and get value
+        //
         // if pnam already in where vals, then this has peference
         if (array_key_exists($pnam, $whereVals)) {
           $value = $whereVals[$pnam];
+          $usePart = true;
         }
         // otherwise if pnam exists in extjs filter vals then we take this
         elseif (array_key_exists($pnam, $extFilter)) {
           $value = $extFilter[$pnam];
+          $usePart = true;
         }
         // otherwise if pnam elsewhere in values (request) then we take this
         elseif (array_key_exists($pnam, $req)) {
           $value = $req[$pnam];
+          $usePart = true;
         }
-        // otherwise if param is forced then add part even if pnam not present
+//echo "use $pnam<br>\n";
+        // handle special internal commands and special cases
+        //
+        // if param is forced then add part even if pnam not present
         // the user is responsible to provide the key and the value elsewhere
-        elseif ($doForceAddParam) {
+        if ($doForceAddParam) {
           $isZombieParam = true;
+          $usePart = true;
         }
+
         // otherwise check if it is a required param
         // if not present till now throw an exeption
-        elseif ($isRequiredParam) {
+        if ($isRequiredParam && !$usePart) {
           throw new Exception("Required parameter '$pnam' not in value array.");
         }
-        // as last resort we do not use this part
-        else {
+
+        // otherwise if value is required do that test
+        if ($valueRequired && !$value) {
           $usePart = false;
           break;
-        }  // check if pnames present
+        }
+
+
+        // final test if part is used
+        if (!$usePart) {
+          break;
+        }
 
         // apply prefix and postfix to value
         if ($valPre && substr($value, 0, 1) != $valPre) {
