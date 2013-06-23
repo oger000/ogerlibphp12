@@ -27,6 +27,10 @@ class OgerDb {
   /// Mainly intended for setting and using in inheriting classes.
   public static $conn;
 
+  /// Debug flag.
+  public static $debug = false;
+
+
 
   /**
   * Enclose a name with database dependend encape chars.
@@ -345,7 +349,7 @@ class OgerDb {
     }
 
 
-//echo "tpl=$tpl<br>\n";
+if (static::$debug) { echo "tpl=$tpl<br>\n"; };
     // get extjs filter from request
     $req['filter'] = OgerExtjs::getStoreFilter(null, $req);
     $extFilter = array();
@@ -445,9 +449,9 @@ class OgerDb {
         if (substr($parenthTpl, -1) == ")") {
           $parenthTpl = substr($parenthTpl, 0, -1);
         }
-//echo "subTpl=$parenthTpl<br>\n";
+if (static::$debug) { echo "subTpl=$parenthTpl<br>\n"; };
         $part = trim(static::extjSqlWhere($parenthTpl, $whereVals, $req));
-//echo "subPart=$part<br>\n";
+if (static::$debug) { echo "subPart=$part<br>\n"; };
         // if not empty reassign parenthesis and add to sql
         if ($part) {
           $part = "($part)";
@@ -459,12 +463,17 @@ class OgerDb {
       }  // parenthesis
 
 
-//echo "part=$part<br>\n";
+if (static::$debug) { echo "part=$part<br>\n"; };
       // check if all parameter names for this part are present
       $usePart = false;
       preg_match_all("/(:[\-\?\+!>]*[%]?[a-z_][a-z0-9_]*[%]?)/i", $part, $matches);
       $pnams = $matches[1];
 //echo "pnams=";var_export($pnams); echo "<br>";
+
+      // if no pnames are present we use that part in any case
+      if (count($pnams) == 0) {
+        $usePart = true;
+      }
 
       foreach ($pnams as $key => $pnamOri) {
 
@@ -517,7 +526,7 @@ class OgerDb {
 
           $intCmdLoop = false;
         }  // eo internal cmd check
-//echo "search for $pnam<br>\n";
+if (static::$debug) { echo "search for $pnam<br>\n"; };
 
         // separate special sql prefix and postfix (e.g. %var%)
         $valPre = "";
@@ -548,7 +557,7 @@ class OgerDb {
           $value = $req[$pnam];
           $usePart = true;
         }
-//echo "use $pnam<br>\n";
+if (static::$debug) { echo "use $pnam<br>\n"; };
         // handle special internal commands and special cases
         //
         // if param is forced then add part even if pnam not present
@@ -607,6 +616,7 @@ class OgerDb {
       if (!trim($part)) {
         $usePart = false;
       }
+if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
       // use part
       if ($usePart) {
