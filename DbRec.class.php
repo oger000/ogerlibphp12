@@ -74,7 +74,9 @@ class DbRec {
     if (is_array($where)) {
       $values = array_merge($where, $values);
     }
-    $result = $pstmt->execute($where);
+    
+    Dbw::checkStmtParams($stmt, $values);
+    $result = $pstmt->execute($values);
     $pstmt->closeCursor();
   }  // eo store to db
 
