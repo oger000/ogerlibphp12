@@ -135,7 +135,7 @@ class OgerDb {
 
     // if errormessage than return or throw exception
     if ($msg) {
-      $msg = "$sql: $msg";
+      $msg = "$msg: $sql";
       throw new Exception($msg);
     }
 
