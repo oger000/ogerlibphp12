@@ -74,7 +74,9 @@ class DbRec {
     if (is_array($where)) {
       $values = array_merge($where, $values);
     }
-    $result = $pstmt->execute($where);
+
+    Dbw::checkStmtParams($stmt, $values);
+    $result = $pstmt->execute($values);
     $pstmt->closeCursor();
   }  // eo store to db
 
@@ -106,41 +108,6 @@ class DbRec {
     return $tpl;
   }  // eo get sql tpl
 
-
-  /**
-  * Get select template.
-  * Empty tub to make getSqlTpl() work in child classes.
-  */
-  public static function getSelectTpl($target) {
-  }  // get select template
-
-
-  /**
-  * Get where sql and prepare sele vals.
-  * Empty tub to make getSqlTpl() work in child classes.
-  */
-  /*
-  public static function getExtjSqlWhere($target, &$seleVals = array()) {
-    $where = static::getWhereTpl($target);
-    $where = Dbw::extjSqlWhere($where, $seleVals);
-    return $where;
-  }  // eo get extjs sql where
-  */
-
-  /**
-  * Get where template.
-  * Empty tub to make getSqlTpl() work in child classes.
-  */
-  public static function getWhereTpl($target) {
-  }  // eo where template
-
-
-  /**
-  * Get order-by template.
-  * Empty tub to make getSqlTpl() work in child classes.
-  */
-  public static function getOrderTpl($target) {
-  }  // eo order by template
 
 
 
