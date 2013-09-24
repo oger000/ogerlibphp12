@@ -309,6 +309,17 @@ class OgerDb {
     }  // eo where
 
 
+    // GROUP BY
+
+
+    // HAVING
+    if (preg_match("/\{\s*HAVING\s.*?\}/i", $tpl, $matches)) {
+      $ori = $matches[0];
+      $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals);
+      $tpl = str_replace($ori, $prep, $tpl);
+    }  // eo having
+
+
     // ORDER BY
     if (preg_match("/\{\s*ORDER\s+BY\s.*?\}/i", $tpl, $matches)) {
       $ori = $matches[0];
@@ -331,7 +342,7 @@ class OgerDb {
 
 
   /**
-  * Prepare WHERE clause with data from extjs request.
+  * Prepare WHERE (or HAVING) clause with data from extjs request.
   * WORK IN PROGRESS
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
@@ -350,6 +361,7 @@ class OgerDb {
 
 
 if (static::$debug) { echo "tpl=$tpl<br>\n"; };
+
     // get extjs filter from request
     $req['filter'] = OgerExtjs::getStoreFilter(null, $req);
     $extFilter = array();
@@ -365,7 +377,7 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
     $tpl = self::extjSqlStrip($tpl);
 
     // detect, save and remove leading where keyword
-    if (preg_match("/^\s*WHERE\s+/i", $tpl, $matches)) {
+    if (preg_match("/^\s*(WHERE|HAVING)\s+/i", $tpl, $matches)) {
       $kw = $matches[0];
       $tpl = str_replace($kw, "", $tpl);
     }  // keyword
@@ -586,12 +598,22 @@ if (static::$debug) { echo "use $pnam<br>\n"; };
         }
 
         // apply prefix and postfix to value
+        /*
         if ($valPre && substr($value, 0, 1) != $valPre) {
           $value = $valPre . $value;
         }
         if ($valPost && substr($value, -1) != $valPost) {
           $value = $value . $valPost;
         }
+        */
+        $value = "{$valPre}{$value}{$valPost}";
+
+        // extracheck for empty %LIKE%
+        if ($valPre == "%" && $valPost == "%" && $value == "%%") {
+          $usePart = false;
+          break;
+        }
+
 
         // write polished pnam out back to where part
         if ($doRemoveColon) {
@@ -624,9 +646,9 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
       }
     }  // eo part loop
 
-    // if sql collected then prefix with keyword
+    // if sql collected then prefix with keyword (and extrablanks to avoid collisions)
     if ($sql) {
-      $sql = $kw . $sql;
+      $sql = " {$kw} {$sql} ";
     }
 
     return $sql;
@@ -714,7 +736,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
     // if sql collected then prefix with keyword
     if ($sql) {
-      $sql = $kw . $sql;
+      $sql = " {$kw} {$sql} ";
     }
 
 
