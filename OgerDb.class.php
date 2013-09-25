@@ -28,6 +28,7 @@ class OgerDb {
   public static $conn;
 
   /// Debug flag.
+  //public static $debug = true;
   public static $debug = false;
 
 
@@ -294,7 +295,7 @@ class OgerDb {
 
 
     // SELECT
-    if (preg_match("/\{\s*SELECT\s.*?\}/i", $tpl, $matches)) {
+    if (preg_match("/\{\s*SELECT\s.*?\}/is", $tpl, $matches)) {
       $ori = $matches[0];
       $prep = substr($ori, 1, -1);
       $tpl = str_replace($ori, $prep, $tpl);
@@ -302,7 +303,7 @@ class OgerDb {
 
 
     // WHERE
-    if (preg_match("/\{\s*WHERE\s.*?\}/i", $tpl, $matches)) {
+    if (preg_match("/\{\s*WHERE\s.*?\}/is", $tpl, $matches)) {
       $ori = $matches[0];
       $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals);
       $tpl = str_replace($ori, $prep, $tpl);
@@ -313,7 +314,7 @@ class OgerDb {
 
 
     // HAVING
-    if (preg_match("/\{\s*HAVING\s.*?\}/i", $tpl, $matches)) {
+    if (preg_match("/\{\s*HAVING\s.*?\}/is", $tpl, $matches)) {
       $ori = $matches[0];
       $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals);
       $tpl = str_replace($ori, $prep, $tpl);
@@ -321,7 +322,7 @@ class OgerDb {
 
 
     // ORDER BY
-    if (preg_match("/\{\s*ORDER\s+BY\s.*?\}/i", $tpl, $matches)) {
+    if (preg_match("/\{\s*ORDER\s+BY\s.*?\}/is", $tpl, $matches)) {
       $ori = $matches[0];
       $prep = static::extjSqlOrderBy(substr($ori, 1, -1));
       $tpl = str_replace($ori, $prep, $tpl);
@@ -344,6 +345,7 @@ class OgerDb {
   /**
   * Prepare WHERE (or HAVING) clause with data from extjs request.
   * WORK IN PROGRESS
+  * Whitespaces are collapsed sometimes, so formating of sql will be lost.
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
@@ -379,29 +381,30 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
     // detect, save and remove leading where keyword
     if (preg_match("/^\s*(WHERE|HAVING)\s+/i", $tpl, $matches)) {
       $kw = $matches[0];
-      $tpl = str_replace($kw, "", $tpl);
+      $tpl = implode("", explode($kw, $tpl, 2));
     }  // keyword
 
-    // split at and/or boundery
-    // TODO detect parenthesis
+    // split at and/or boundery (TODO may be problems without leading whitespace)
     $parts = preg_split("/(\s+OR\s+|\s+AND\s+)/i", $tpl, null, PREG_SPLIT_DELIM_CAPTURE);
-    while (count($parts)) {
+    while (count($parts)) {  // we play with shift/unshift, so do not use foreach
       $part = array_shift($parts);
 
-      // detect and/or glue and remember (and reset NOT keyword)
+      // detect and/or glue and remember (and reset NOT keyword - detected later)
       $tmp = strtoupper(trim($part));
       if ($tmp == "OR" || $tmp == "AND") {
         $andOrGlue = $part;
-        $notKw = "";
+        $kwNOT = "";
         continue;
       }
 
       // detect leading NOT and remember
       if (preg_match("/^\s*NOT\s+/i", $part, $matches)) {
-        $notKw = $matches[0];
-        $part = str_replace($notKw, "", $part);
+        $kwNOT = strtoupper(trim($matches[0]));
+        $part = implode("", explode($kwNOT, $part, 2));
       }
 
+
+      $part = trim($part);
 
       // handle grouping of conditions by parenthesis
       // check for first opening parenthesis
@@ -414,6 +417,9 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
         array_unshift($parts, $part);
 
         // loop till closing parenthesis
+        // TODO maybe a plain opening "(" and closing ")" counting
+        // would be better / simpler if no pattern used as literal
+        // but only in sql syntax
         while (count($parts)) {
           $tmpPart = trim(array_shift($parts));
 
@@ -421,7 +427,7 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
           // can be hidden after a leading NOT
           $tmpPart2 = $tmpPart;
           if (preg_match("/^\s*NOT\s+/i", $tmpPart2, $matches)) {
-            $tmpPart2 = str_replace($matches[0], "", $tmpPart2);
+            $tmpPart2 = implode("", explode($matches[0], $tmpPart2, 2));
           }
 
           // increment by leading opening parenthesis - maybe there are more than one
@@ -441,7 +447,7 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
           }
 
           // add full part
-          $parenthTpl .= " $tmpPart";
+          $parenthTpl .= ($parenthTpl ? " " : "") . $tmpPart;
 
           // final closing parenthesis reached
           if ($parenthCount <= 0) {
@@ -461,13 +467,15 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
         if (substr($parenthTpl, -1) == ")") {
           $parenthTpl = substr($parenthTpl, 0, -1);
         }
-if (static::$debug) { echo "subTpl=$parenthTpl<br>\n"; };
+if (static::$debug) { echo "subTplIn=$parenthTpl<br>\n"; };
+        // process parenthesis template as separate template run
         $part = trim(static::extjSqlWhere($parenthTpl, $whereVals, $req));
-if (static::$debug) { echo "subPart=$part<br>\n"; };
-        // if not empty reassign parenthesis and add to sql
+if (static::$debug) { echo "subPartOut=$part<br>\n"; };
+        // if parentesis template processing is not empty
+        // then reassign parenthesis and add to sql
         if ($part) {
           $part = "($part)";
-          $sql .= ($sql ? $andOrGlue : "") . $notKw . $part;
+          $sql .= ($sql ? " {$andOrGlue}" : "") . ($kwNOT ? " {$kwNOT}" : "") . " {$part}";
         }
         // handling of current parenthesis part finished
         // continue with parts after closing parenthesis
@@ -478,7 +486,7 @@ if (static::$debug) { echo "subPart=$part<br>\n"; };
 if (static::$debug) { echo "part=$part<br>\n"; };
       // check if all parameter names for this part are present
       $usePart = false;
-      preg_match_all("/(:[\-\?\+!>]*[%]?[a-z_][a-z0-9_]*[%]?)/i", $part, $matches);
+      preg_match_all("/(:[\-\?\+!>@]*?[a-z_][a-z0-9_]+)/i", $part, $matches);
       $pnams = $matches[1];
 //echo "pnams=";var_export($pnams); echo "<br>";
 
@@ -530,7 +538,9 @@ if (static::$debug) { echo "part=$part<br>\n"; };
             continue;
           }
           // use only if not empty (untrimmed)
-          if (substr($pnam, 0, 1) == ">") {
+          // support ">" for backward compability
+          if (substr($pnam, 0, 1) == ">" ||
+              substr($pnam, 0, 1) == "@") {
             $valueRequired = true;
             $pnam = substr($pnam, 1);
             continue;
@@ -540,17 +550,6 @@ if (static::$debug) { echo "part=$part<br>\n"; };
         }  // eo internal cmd check
 if (static::$debug) { echo "search for $pnam<br>\n"; };
 
-        // separate special sql prefix and postfix (e.g. %var%)
-        $valPre = "";
-        $valPost = "";
-        if (substr($pnam, 0, 1) == "%") {
-          $valPre = "%";
-          $pnam = substr($pnam, 1);
-        }
-        if (substr($pnam, -1) == "%") {
-          $valPost = "%";
-          $pnam = substr($pnam, 0, -1);
-        }
 
         // check if key exists and get value
         //
@@ -585,7 +584,8 @@ if (static::$debug) { echo "use $pnam<br>\n"; };
           throw new Exception("Required parameter '$pnam' not in value array.");
         }
 
-        // otherwise if value is required do that test
+        // otherwise if value is required but not present
+        // then exlude if value is not present
         if ($valueRequired && !$value) {
           $usePart = false;
           break;
@@ -594,23 +594,6 @@ if (static::$debug) { echo "use $pnam<br>\n"; };
 
         // final test if part is used
         if (!$usePart) {
-          break;
-        }
-
-        // apply prefix and postfix to value
-        /*
-        if ($valPre && substr($value, 0, 1) != $valPre) {
-          $value = $valPre . $value;
-        }
-        if ($valPost && substr($value, -1) != $valPost) {
-          $value = $value . $valPost;
-        }
-        */
-        $value = "{$valPre}{$value}{$valPost}";
-
-        // extracheck for empty %LIKE%
-        if ($valPre == "%" && $valPost == "%" && $value == "%%") {
-          $usePart = false;
           break;
         }
 
@@ -642,12 +625,15 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
       // use part
       if ($usePart) {
-        $sql .= ($sql ? $andOrGlue : "") . $notKw . $part;
+        $sql .= ($sql ? " {$andOrGlue}" : "") . ($kwNOT ? " {$kwNOT}" : "") . " {$part}";
       }
     }  // eo part loop
 
     // if sql collected then prefix with keyword (and extrablanks to avoid collisions)
     if ($sql) {
+      // replace escaped AND / OR part-delimiter
+      $sql = preg_replace("/\b\\\\AND\b/", "AND", $sql);
+      $sql = preg_replace("/\b\\\\OR\b/", "OR", $sql);
       $sql = " {$kw} {$sql} ";
     }
 
@@ -675,7 +661,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     // detect, save and remove leading where keyword
     if (preg_match("/^\s*ORDER\s+BY\s+/i", $tpl, $matches)) {
       $kw = $matches[0];
-      $tpl = str_replace($kw, "", $tpl);
+      $tpl = implode("", explode($kw, $tpl, 2));
     }
 
 
@@ -689,7 +675,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
         $key = trim($key);
         $value = trim($value);
       }
-      else {
+      else {  // for stand alone colnames sort expression is same as colname
         $key = $value;
       }
       $tplSorter[$key] = $value;
@@ -700,37 +686,30 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {
-      if (!static::columnCharsValid($colName)) {
-        throw new Exception("Invalid character in sort key (column name) '$colName' in ExtJS sort.");
-      }
-      if ($direct &&  $direct != "ASC" && $direct != "DESC" && $direct != "") {
+
+      if ($direct &&  $direct != "ASC" && $direct != "DESC" && trim($direct) != "") {
         throw new Exception("Invalid direction '$direct' for column name '$colName' in ExtJS sort.");
       }
 
-      // column name from ext must be present in template sorter
-      // or template sorter wildcard (*) must be set, otherwise stop
-      if (!($tplSorter[$colName] || $tplSorter['*'])) {
+      // apply sort expression from template when
+      // present, otherwise ignore sort request
+      $sortExpr = trim($tplSorter[$colName]);
+      if (!$sortExpr) {
         continue;
       }
 
-      // encode plain column names
-      $colNameOut = static::$encNamBegin . $colName . static::$encNamEnd;
+      $sql .=
+        ($sql ? "," : "") . $sortExpr .
+        ($direct ? " " : "") . $direct;
 
-      // if template sorter info is present overwrite plain name
-      if (array_key_exists($colName, $tplSorter)) {
-        $colNameOut = $tplSorter[$colName];
-      }
-
-      if ($colNameOut) {
-        $sql .= ($sql ? ", " : "") . $colNameOut .
-                ($direct ? " " : "") . $direct;
-      }
     }  // eo ext sort item loop
+
+    $sql = trim($sql);
 
     // if no ext sorters are given but a default template sorter is present
     // and no sql composed, then use the template sorter default
-    if (!count($req['sort']) && $tplSorter['@'] && !$sql) {
-      $sql .= ($sql ? ", " : "") . $tplSorter['@'];
+    if (!count($req['sort']) && $tplSorter['?'] && !$sql) {
+      $sql .= ($sql ? "," : "") . $tplSorter['?'];
     }
 
 

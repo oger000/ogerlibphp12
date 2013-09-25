@@ -8,8 +8,7 @@
 
 /**
 * Prepare sql template wit extjs request.
-* This class is not intended for direct use but to backup
-* methods that was removed from OgerDb for later use.
+* This class is not intended for direct use but as backup
 */
 class OgerExtjSqlTpl {
 
