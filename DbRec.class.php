@@ -82,35 +82,6 @@ class DbRec {
 
 
 
-
-  /**
-  * Get full sql template.
-  */
-  public static function getSqlTpl($selectTarget, $whereTarget = null, $orderTarget = null) {
-
-    $tpl = static::getSelectTpl($selectTarget);
-
-    if ($whereTarget) {
-      $whereTarget = ltrim($whereTarget);
-      // a prefix of "=" returns the where target unchanged (prefix stripped)
-      if (substr($whereTarget, 0, 1) == "=") {
-        $tpl .= " " . substr($whereTarget, 1);
-      }
-      else {
-        $tpl .= " " . static::getWhereTpl($whereTarget, $whereVals);
-      }
-    }  // where
-
-    if ($orderTarget) {
-      $tpl .= " " . static::getOrderTpl($orderTarget);
-    }
-
-    return $tpl;
-  }  // eo get sql tpl
-
-
-
-
   /**
   * Prepare date fields for output.
   */
