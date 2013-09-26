@@ -594,6 +594,21 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
       $tplSorter[$key] = $value;
     }
 
+
+    // if no sort expression is present then fill with default sort
+    // if no default sort exists remove sort key
+    $defaultSort = $tplSorter[''];
+    foreach($tplSorter as $key => $value) {
+      if (!$value) {
+        if ($defaultSort) {
+          $tplSorter[$key] = $defaultSort;
+        }
+        else {
+          unset($tplSorter[$key]);
+        }
+      }
+    }
+
     // convert sort info from json to array
     $req['sort'] = self::getStoreSort(null, $req);
 
@@ -604,8 +619,8 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
         throw new Exception("Invalid direction '$direct' for column name '$colName' in ExtJS sort.");
       }
 
-      // apply sort expression from template when
-      // present, otherwise ignore sort request
+      // apply sort expression from template when exists,
+      // otherwise ignore sort request
       $sortExpr = trim($tplSorter[$colName]);
       if (!$sortExpr) {
         continue;
@@ -619,10 +634,9 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
     $sql = trim($sql);
 
-    // if no ext sorters are given but a default template sorter is present
-    // and no sql composed, then use the template sorter default
-    if (!count($req['sort']) && $tplSorter[''] && !$sql) {
-      $sql .= ($sql ? "," : "") . $tplSorter[''];
+    // if no order-by sql is composed, then use the template default sort
+    if (!$sql && $defaultSort) {
+      $sql = $defaultSort;
     }
 
 
