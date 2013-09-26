@@ -52,6 +52,19 @@ class DbRec {
 
 
   /**
+  * Get prepared sql string and fill sele vals
+  */
+  public static function getSql($target, &$seleVals = array()) {
+    $tpl = static::getSqlTpl($target);
+    $sql = Extjs::extjSql($tpl, $seleVals);
+    return $sql;
+  }  // eo get sql
+
+
+
+
+
+  /**
   * Write record values to db.
   * Accepts old style WHERE values (as array) too.
   */

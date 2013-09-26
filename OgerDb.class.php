@@ -99,7 +99,7 @@ class OgerDb {
 
     // extract keys and remove leading ":" (if any) from keys
     $valKeys = array();
-    foreach ($values as $key => $value) {
+    foreach ((array)$values as $key => $value) {
       if (substr($key, 0, 1) == ":") {
         $key = substr($key, 1);
       }
@@ -136,7 +136,7 @@ class OgerDb {
 
     // if errormessage than return or throw exception
     if ($msg) {
-      $msg = "$msg: $sql";
+      $msg = "$msg Sql: $sql";
       throw new Exception($msg);
     }
 

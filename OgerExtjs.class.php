@@ -349,6 +349,7 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
             $parenthCount++;
             $cTmp = ltrim(substr($cTmp, 1));
 //echo "c=$parenthCount; $tmpPart2<br>";
+//@file_put_contents("debug.localonly", var_export($values, true) . "\n\n", FILE_APPEND);
           }
 
           // decrement by trailing closing parenthesis - maybe there are more than one
@@ -583,6 +584,9 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     $tplSorter = array();
     foreach ((array)$parts as $value) {
       $value = trim($value);
+      if (!$value) {
+        continue;
+      }
       if (strpos($value, "=") !== false) {
         list($key, $value) = explode("=", $value, 2);
         $key = trim($key);
@@ -598,6 +602,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     // if no sort expression is present then fill with default sort
     // if no default sort exists remove sort key
     $defaultSort = $tplSorter[''];
+//@file_put_contents("debug.localonly", "defaultsort={$tplSorter['']}\n\n", FILE_APPEND);
     foreach($tplSorter as $key => $value) {
       if (!$value) {
         if ($defaultSort) {
@@ -626,9 +631,18 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
         continue;
       }
 
-      $sql .=
-        ($sql ? "," : "") . $sortExpr .
-        ($direct ? " " : "") . $direct;
+      // compose sql
+      // if sort direction placeholder exists replace ALL placeholder
+      // otherwise append direction if given
+      $tmpSql = $sortExpr;
+      if (strpos($tmpSql, "__EXTJS_DIRECTION__") !== false) {
+        $tmpSql = str_replace("__EXTJS_DIRECTION__", $direct, $tmpSql);
+      }
+      elseif($direct) {
+        $tmpSql .= " $direct";
+      }
+//@file_put_contents("debug.localonly", "sortexpr=$tmpSql\n\n", FILE_APPEND);
+      $sql .= ($sql ? "," : "") . $tmpSql;
 
     }  // eo ext sort item loop
 
