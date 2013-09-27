@@ -56,7 +56,7 @@ class DbRec {
   */
   public static function getSql($target, &$seleVals = array()) {
     $tpl = static::getSqlTpl($target);
-    $sql = Extjs::extjSql($tpl, $seleVals);
+    $sql = OgerExtjs::extjSql($tpl, $seleVals);
     return $sql;
   }  // eo get sql
 

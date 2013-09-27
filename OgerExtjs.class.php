@@ -581,6 +581,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
     // extract extra sort field info from template
     $parts = explode(";", $tpl);
+//@file_put_contents("debug.localonly", "tpl=$tpl => " . var_export($parts, true) . "\n\n", FILE_APPEND);
     $tplSorter = array();
     foreach ((array)$parts as $value) {
       $value = trim($value);
@@ -598,11 +599,11 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
       $tplSorter[$key] = $value;
     }
 
+//@file_put_contents("debug.localonly", "tplsorter1=" . var_export($tplSorter, true) . "\n\n", FILE_APPEND);
 
     // if no sort expression is present then fill with default sort
     // if no default sort exists remove sort key
     $defaultSort = $tplSorter[''];
-//@file_put_contents("debug.localonly", "defaultsort={$tplSorter['']}\n\n", FILE_APPEND);
     foreach($tplSorter as $key => $value) {
       if (!$value) {
         if ($defaultSort) {
@@ -616,6 +617,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
     // convert sort info from json to array
     $req['sort'] = self::getStoreSort(null, $req);
+//@file_put_contents("debug.localonly", "storesort=" . var_export($req['sort'], true) . "\n\n", FILE_APPEND);
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {
@@ -641,7 +643,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
       elseif($direct) {
         $tmpSql .= " $direct";
       }
-//@file_put_contents("debug.localonly", "sortexpr=$tmpSql\n\n", FILE_APPEND);
+
       $sql .= ($sql ? "," : "") . $tmpSql;
 
     }  // eo ext sort item loop
