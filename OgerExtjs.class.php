@@ -349,7 +349,6 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
             $parenthCount++;
             $cTmp = ltrim(substr($cTmp, 1));
 //echo "c=$parenthCount; $tmpPart2<br>";
-//@file_put_contents("debug.localonly", var_export($values, true) . "\n\n", FILE_APPEND);
           }
 
           // decrement by trailing closing parenthesis - maybe there are more than one
@@ -381,10 +380,10 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
         if (substr($parenthTpl, -1) == ")") {
           $parenthTpl = substr($parenthTpl, 0, -1);
         }
-if (static::$debug) { echo "subTplIn=$parenthTpl<br>\n"; };
+
         // process parenthesis template as separate template run
         $part = trim(static::extjSqlWhere($parenthTpl, $whereVals, $req));
-if (static::$debug) { echo "subPartOut=$part<br>\n"; };
+
         // if parentesis template processing is not empty
         // then reassign parenthesis and add to sql
         if ($part) {
@@ -495,7 +494,7 @@ if (static::$debug) { echo "use $pnam<br>\n"; };
         // otherwise check if it is a required param
         // if not present till now throw an exeption
         if ($isRequiredParam && !$usePart) {
-          throw new Exception("Required parameter '$pnam' not in value array.");
+          throw new Exception("Required parameter '$pnam' not in value array for {$tpl}.");
         }
 
         // otherwise if value is required but not present
@@ -617,7 +616,6 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
     // convert sort info from json to array
     $req['sort'] = self::getStoreSort(null, $req);
-//@file_put_contents("debug.localonly", "storesort=" . var_export($req['sort'], true) . "\n\n", FILE_APPEND);
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {

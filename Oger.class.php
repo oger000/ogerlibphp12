@@ -89,13 +89,22 @@ class Oger {
 
 
   /**
-  * Report a debug message.
+  * Report a debug message to the php error system.
   * @param $msg Debug message.
   */
   public static function debug($msg) {
     trigger_error($msg, E_USER_WARNING);
-  }
+  }  // eo debug to php error system
 
+
+  /**
+  * Report a debug message to a file.
+  * @param $msg Debug message.
+  * @param $fileName File to write to. Must be writable for calling user.
+  */
+  public static function debugFile($msg, $fileName = "debug.localonly") {
+    @file_put_contents($fileName, "{$msg}\n", FILE_APPEND);
+  }  // eo debug to file
 
 
 }  // eo class
