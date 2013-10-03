@@ -649,8 +649,9 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     $sql = trim($sql);
 
     // if no order-by sql is composed, then use the template default sort
+    // but remove direction placeholder fist
     if (!$sql && $defaultSort) {
-      $sql = $defaultSort;
+      $sql = str_replace("__EXTJS_DIRECTION__", "", $defaultSort);
     }
 
 
