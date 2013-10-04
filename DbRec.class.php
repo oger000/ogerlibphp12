@@ -30,7 +30,7 @@
 class DbRec {
 
   public static $tableName;
-  public static $primaryWhere;
+
 
   /**
   * Filter out column values from an array.
@@ -74,9 +74,6 @@ class DbRec {
 
     // sanity check - do not update without WHERE clause
     if ($storeAction == "UPDATE") {
-      if (!$where) {
-        $where = static::$primaryWhere;
-      }
       if (!$where) {
         throw new Exception("Update without WHERE clause refused.");
       }
