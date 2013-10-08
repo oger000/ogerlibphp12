@@ -103,8 +103,38 @@ class Oger {
   * @param $fileName File to write to. Must be writable for calling user.
   */
   public static function debugFile($msg, $fileName = "debug.localonly") {
+    $msg = "\n" . date("c") . ":\n{$msg}";
     @file_put_contents($fileName, "{$msg}\n", FILE_APPEND);
   }  // eo debug to file
+
+
+
+  /**
+  * Create natural sort entry for an id
+  * Expand every numeric part by prefixing with zeros to a fixed length.
+  * Negative sign and decimal chars are detected as NON-number chars
+  * TODO move/copy to Oger class
+  */
+  public static function natSortId($id, $numlength = 10, $maxlength = null) {
+    preg_match_all("/(\d+)/", $id, $matches);
+    $parts = preg_split("/(\d+)/", $id);
+
+    $natId = "";
+    foreach ($matches[1] as $num) {
+      $part = array_shift($parts);
+      $natId .= $part . str_pad($num, $numlength, "0", STR_PAD_LEFT);
+    }
+    $natId .= array_shift($parts);
+
+    if ($maxlength > 0) {
+      $natId = substr($natId, 0, $maxlength);
+    }
+
+    return $natId;
+  }  // eo natural sort
+
+
+
 
 
 }  // eo class
