@@ -145,6 +145,17 @@ class Dbw extends OgerDb {
       }
     }  // eo ogerarch specific
 
+
+    $structTableName = "dbStructLog";
+    $oldStructSerial = static::fetchValue1("SELECT MAX(structSerial) FROM {$structTableName}");
+    $newStructSerial = static::$struct['DBSTRUCT_META']['SERIAL'];
+
+    // preprocess script before updating dbstruct
+    $preProcessFile = "dbstruct/preprocess.inc.php";
+    if (file_exists($preProcessFile)) {
+      include($preProcessFile);
+    }
+
     // check struct and update
     $beginTime = date("c");
     $structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
@@ -159,7 +170,6 @@ class Dbw extends OgerDb {
     $log = trim($structChecker->flushLog());
 
     // report log and errors if there is anything to report
-    $structTableName = "dbStructLog";
     $structTableKey = strtolower($structTableName);
     $oldDbStruct = $structChecker->getDbStruct();
     if ((trim($log) || trim($error))) {
@@ -213,7 +223,13 @@ class Dbw extends OgerDb {
       throw new Exception($error);
     }
 
-  }  // eo check struct
+    // preprocess script before updating dbstruct
+    $postProcessFile = "dbstruct/postprocess.inc.php";
+    if (file_exists($postProcessFile)) {
+      include($postProcessFile);
+    }
+
+  }  // eo check and update struct
 
 
 
