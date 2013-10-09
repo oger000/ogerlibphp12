@@ -112,10 +112,10 @@ class Oger {
   /**
   * Create natural sort entry for an id
   * Expand every numeric part by prefixing with zeros to a fixed length.
-  * Negative sign and decimal chars are detected as NON-number chars
-  * TODO move/copy to Oger class
+  * Negative and positive sign and decimal chars are detected as NON-number chars
+  * this is object of later improvement via opts
   */
-  public static function natSortId($id, $numlength = 10, $maxlength = null) {
+  public static function getNatSortId($id, $numlength = 10, $opts = array()) {
     preg_match_all("/(\d+)/", $id, $matches);
     $parts = preg_split("/(\d+)/", $id);
 
@@ -126,8 +126,8 @@ class Oger {
     }
     $natId .= array_shift($parts);
 
-    if ($maxlength > 0) {
-      $natId = substr($natId, 0, $maxlength);
+    if ($opts['maxlength'] > 0) {
+      $natId = substr($natId, 0, $opts['maxlength']);
     }
 
     return $natId;

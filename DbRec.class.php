@@ -88,6 +88,10 @@ class DbRec {
     Dbw::checkStmtParams($stmt, $values);
     $result = $pstmt->execute($values);
     $pstmt->closeCursor();
+
+    // return pstmt for using outside (e.g. counting affected rows)
+    // ATTENTION: mysql returns 0 if records are found but nothing changed!!!
+    return $pstmt;
   }  // eo store to db
 
 
