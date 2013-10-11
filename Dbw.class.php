@@ -147,7 +147,15 @@ class Dbw extends OgerDb {
 
 
     $structTableName = "dbStructLog";
-    $oldStructSerial = static::fetchValue1("SELECT MAX(structSerial) FROM {$structTableName}");
+    try {
+      $oldStructSerial = static::fetchValue1("SELECT MAX(structSerial) FROM {$structTableName}");
+    }
+    catch (Exception $ex) {
+      // on bootstrap the dbstruct log table does not exist. nevertheless
+      // report the error because there could be another reason for the exception
+      $bootstrapError = $ex->getMessage();
+      $oldStructSerial = -1;
+    }
     $newStructSerial = static::$struct['DBSTRUCT_META']['SERIAL'];
 
     // preprocess script before updating dbstruct
@@ -199,7 +207,7 @@ class Dbw extends OgerDb {
           "structSerial" => 0 + static::$struct['DBSTRUCT_META']['SERIAL'],
           "structTime" => "" . static::$struct['DBSTRUCT_META']['TIME'],
           "log" => "$log",
-          "error" => "$error",
+          "error" => ($bootstrapError ? "{$bootstrapError} " : "") . "$error",
           "postCheck" => "$postLog",
           "surplus" => "$surplusLog",
           "endTime" => date("c"),
