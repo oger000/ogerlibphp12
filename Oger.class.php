@@ -116,6 +116,15 @@ class Oger {
   * this is object of later improvement via opts
   */
   public static function getNatSortId($id, $numlength = 10, $opts = array()) {
+
+    // preprocess alpha parts
+    $id = strtoupper($id);  // all uppercase
+    // remove all spaces
+    // maybe fold multiple spaces into one and
+    // remove spaces in front of numbers would be enough?
+    $id = str_replace(" ", "", $id);
+
+    // handle numeric parts
     preg_match_all("/(\d+)/", $id, $matches);
     $parts = preg_split("/(\d+)/", $id);
 
