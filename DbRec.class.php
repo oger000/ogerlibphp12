@@ -54,9 +54,9 @@ class DbRec {
   /**
   * Get prepared sql string and fill sele vals
   */
-  public static function getSql($target, &$seleVals = array()) {
+  public static function getSql($target, &$seleVals = array(), $req = null) {
     $tpl = static::getSqlTpl($target);
-    $sql = OgerExtjs::extjSql($tpl, $seleVals);
+    $sql = OgerExtjs::extjSql($tpl, $seleVals, $req);
     return $sql;
   }  // eo get sql
 
