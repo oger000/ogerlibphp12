@@ -227,6 +227,14 @@ class OgerExtjs {
 
 
     // GROUP BY
+    // ATTENTION: extjSqlGroupBy() is totaly untested, so disable by now !!!
+    /*
+    if (preg_match("/\{\s*GROUP\s+BY\s.*?\}/is", $tpl, $matches)) {
+      $ori = $matches[0];
+      $prep = static::extjSqlGroupBy(substr($ori, 1, -1));
+      $tpl = str_replace($ori, $prep, $tpl);
+    }  // eo group by
+    */
 
 
     // HAVING
@@ -663,6 +671,114 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
     return $sql;
   }  // eo ORDER BY with ext
+
+
+
+  /**
+  * Prepare GROUP BY clause with data from extjs request.
+  * WORK IN PROGRESS
+  * @params $tpl: The template containing special sql
+  */
+  public static function extjSqlGroupBy($tpl, $req = null) {
+
+    if ($whereVals === null) {
+      $whereVals = array();
+    }
+
+    if ($req === null) {
+      $req = $_REQUEST;
+    }
+
+
+    // detect, save and remove leading where keyword
+    if (preg_match("/^\s*GROUP\s+BY\s+/i", $tpl, $matches)) {
+      $kw = $matches[0];
+      $tpl = implode("", explode($kw, $tpl, 2));
+    }
+
+
+    // extract extra group field info from template
+    $parts = explode(";", $tpl);
+    $tplSorter = array();
+    foreach ((array)$parts as $value) {
+      $value = trim($value);
+      if (!$value) {
+        continue;
+      }
+      if (strpos($value, "=") !== false) {
+        list($key, $value) = explode("=", $value, 2);
+        $key = trim($key);
+        $value = trim($value);
+      }
+      else {  // for stand alone colnames group expression is same as colname
+        $key = $value;
+      }
+      $tplSorter[$key] = $value;
+    }
+
+    // if no group expression is present then fill with default group
+    // if no default group exists remove group key
+    $defaultSort = $tplSorter[''];
+    foreach($tplSorter as $key => $value) {
+      if (!$value) {
+        if ($defaultSort) {
+          $tplSorter[$key] = $defaultSort;
+        }
+        else {
+          unset($tplSorter[$key]);
+        }
+      }
+    }
+
+    // convert sort info from json to array
+    $req['sort'] = self::getStoreSort(null, $req);
+
+    // loop over sort info from ext
+    foreach ((array)$req['sort'] as $colName => $direct) {
+
+      if ($direct &&  $direct != "ASC" && $direct != "DESC" && trim($direct) != "") {
+        throw new Exception("Invalid direction '$direct' for column name '$colName' in ExtJS sort.");
+      }
+
+      // apply sort expression from template when exists,
+      // otherwise ignore sort request
+      $sortExpr = trim($tplSorter[$colName]);
+      if (!$sortExpr) {
+        continue;
+      }
+
+      // compose sql
+      // if sort direction placeholder exists replace ALL placeholder
+      // otherwise append direction if given
+      $tmpSql = $sortExpr;
+      if (strpos($tmpSql, "__EXTJS_DIRECTION__") !== false) {
+        $tmpSql = str_replace("__EXTJS_DIRECTION__", $direct, $tmpSql);
+      }
+      elseif($direct) {
+        $tmpSql .= " $direct";
+      }
+
+      $sql .= ($sql ? "," : "") . $tmpSql;
+
+    }  // eo ext sort item loop
+
+    $sql = trim($sql);
+
+    // if no order-by sql is composed, then use the template default sort
+    // but remove direction placeholder fist
+    if (!$sql && $defaultSort) {
+      $sql = str_replace("__EXTJS_DIRECTION__", "", $defaultSort);
+    }
+
+
+    // if sql collected then prefix with keyword
+    if ($sql) {
+      $sql = " {$kw} {$sql} ";
+    }
+
+
+    return $sql;
+  }  // eo GROUP BY with ext
 
 
 
