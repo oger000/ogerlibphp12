@@ -73,11 +73,15 @@ class Dbw extends OgerDb {
                         static::$dbDef["driverOpts"]);
       }
       catch (Exception $ex) {
+        $connEx = $ex;
         $conn = false;
       }
     }
     if ($conn === false) {
-      echo Extjs::errorMsg("Cannot connect to database " . static::$dbDef["dbName"] . " ().");
+      if ($connEx) {
+        $exMsg = $connEx->getMessage();
+      }
+      echo Extjs::errorMsg("Cannot connect to database " . static::$dbDef["dbName"] . " ($exMsg).");
       exit;
     }
     static::$conn = $conn;
