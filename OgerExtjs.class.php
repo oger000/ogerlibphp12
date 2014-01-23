@@ -174,7 +174,7 @@ class OgerExtjs {
     }
 
    // no limit or limit is empty or non-numeric
-    if (!$req[$limitName] || !is_numeric($req[$limitName])) {
+    if (!array_key_exists($limitName, $req) || !is_numeric($req[$limitName])) {
       return "";
     }
     $limit = "" . intval($req[$limitName]);
@@ -210,7 +210,7 @@ class OgerExtjs {
     }
 
 
-    // SELECT
+    // SELECT - obsoleted by now, only removes brackets
     if (preg_match("/\{\s*SELECT\s.*?\}/is", $tpl, $matches)) {
       $ori = $matches[0];
       $prep = substr($ori, 1, -1);
@@ -221,7 +221,7 @@ class OgerExtjs {
     // WHERE
     if (preg_match("/\{\s*WHERE\s.*?\}/is", $tpl, $matches)) {
       $ori = $matches[0];
-      $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals);
+      $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals, $req);
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo where
 
@@ -240,7 +240,7 @@ class OgerExtjs {
     // HAVING
     if (preg_match("/\{\s*HAVING\s.*?\}/is", $tpl, $matches)) {
       $ori = $matches[0];
-      $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals);
+      $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals, $req);
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo having
 
@@ -248,7 +248,7 @@ class OgerExtjs {
     // ORDER BY
     if (preg_match("/\{\s*ORDER\s+BY\s.*?\}/is", $tpl, $matches)) {
       $ori = $matches[0];
-      $prep = static::extjSqlOrderBy(substr($ori, 1, -1));
+      $prep = static::extjSqlOrderBy(substr($ori, 1, -1), $req);
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo order by
 
@@ -256,7 +256,7 @@ class OgerExtjs {
     // LIMIT
     $ori = "__EXTJS_LIMIT__";
     if (strpos($tpl, $ori) !== false) {
-      $prep = static::extjSqlLimit();
+      $prep = static::extjSqlLimit($req);
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo limit
 
