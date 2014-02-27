@@ -22,11 +22,17 @@ class OgerExtjs {
   * @param $success Boolean flag for the success property. Defaults to true.<br>
   *        - Null: Do not set a new and do not change an existing success property.
   * @return Json encoded array.
+  * For content type see <http://www.ietf.org/rfc/rfc4627.txt>
+  * and <http://stackoverflow.com/questions/477816/what-is-the-correct-json-content-type>
+  * and <http://stackoverflow.com/questions/267546/correct-content-type-http-header-for-json>
+  *    For JSON: header('Content-Type: application/json');
+  *    For JSON-P: header('Content-Type: application/javascript');
   */
   public static function enc($arr = array(), $success = true) {
     if ($success !== null) {
       $arr["success"] = (boolean)$success;
     }
+    header("Content-Type: application/json");
     return json_encode($arr);
   }  // eo json encoded array
 
