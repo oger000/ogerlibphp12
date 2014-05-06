@@ -225,10 +225,11 @@ class OgerExtjs {
 
 
     // WHERE
-    if (preg_match("/\{\s*WHERE\s.*?\}/is", $tpl, $matches)) {
-      $ori = $matches[0];
-      $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals, $req);
-      $tpl = str_replace($ori, $prep, $tpl);
+    if (preg_match_all("/\{\s*WHERE\s.*?\}/is", $tpl, $matches)) {
+      foreach ($matches[0] as $ori) {
+        $prep = static::extjSqlWhere(substr($ori, 1, -1), $seleVals, $req);
+        $tpl = str_replace($ori, $prep, $tpl);
+      }
     }  // eo where
 
 
