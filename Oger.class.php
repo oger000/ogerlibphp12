@@ -103,6 +103,9 @@ class Oger {
   * @param $fileName File to write to. Must be writable for calling user.
   */
   public static function debugFile($msg, $fileName = "debug.localonly") {
+    if (is_array($msg)) {
+      $msg = var_export($msg, true);
+    }
     $msg = "\n" . date("c") . ":\n{$msg}";
     @file_put_contents($fileName, "{$msg}\n", FILE_APPEND);
   }  // eo debug to file
