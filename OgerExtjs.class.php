@@ -280,7 +280,9 @@ class OgerExtjs {
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function extjSqlWhere($tpl, &$whereVals = array(), $req = null) {
+  public static function extjSqlWhere($tpl, &$whereVals = array(), $req = null, $opts = array()) {
+//Oger::debugFile("tpl=$tpl");
+
 
     $tplOri = $tpl;
 
@@ -292,8 +294,6 @@ class OgerExtjs {
       $req = $_REQUEST;
     }
 
-
-if (static::$debug) { echo "tpl=$tpl<br>\n"; };
 
     // get extjs filter from request
     $req['filter'] = self::getStoreFilter(null, $req);
@@ -336,46 +336,67 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
 
       // handle grouping of conditions by parenthesis
       // check for first opening parenthesis
-      if (substr(ltrim($part), 0, 1) == "(") {
+      if (substr(ltrim($part), 0, 1) == "(" && !$opts['skipParenthesis']) {
 
-        $parenthCount = 0;
         $parenthTpl = "";
 
         // put current part back because it is called again
         array_unshift($parts, $part);
 
         // loop till closing parenthesis
-        // TODO maybe a plain opening "(" and closing ")" counting
-        // would be better / simpler if no pattern used as literal
-        // but only in sql syntax
         while (count($parts)) {
+
           $tmpPart = trim(array_shift($parts));
-
-          // check for opening parenthesis
-          // can be hidden after a leading NOT
-          $tmpPart2 = $tmpPart;
-          if (preg_match("/^\s*NOT\s+/i", $tmpPart2, $matches)) {
-            $tmpPart2 = implode("", explode($matches[0], $tmpPart2, 2));
-          }
-
-          // increment by leading opening parenthesis - maybe there are more than one
-          $cTmp = ltrim($tmpPart2);
-          while (substr($cTmp, 0, 1) == "(") {
-            $parenthCount++;
-            $cTmp = ltrim(substr($cTmp, 1));
-//echo "c=$parenthCount; $tmpPart2<br>";
-          }
-
-          // decrement by trailing closing parenthesis - maybe there are more than one
-          $cTmp = rtrim($tmpPart2);
-          while (substr($cTmp, -1) == ")") {
-            $parenthCount--;
-            $cTmp = rtrim(substr($cTmp, 0, -1));
-//echo "c=$parenthCount; $tmpPart2<br>";
-          }
 
           // add full part
           $parenthTpl .= ($parenthTpl ? " " : "") . $tmpPart;
+
+          // check parenthesis balance
+          $parenthCount = 0;
+          $strDelimChar = "";
+          $litStr = "";
+
+          for ($i=0; $i < strlen($parenthTpl); $i++) {
+
+            $ch = $parenthTpl[$i];
+
+            // skip literal strings
+            if ($strDelimChar) {  // we are inside a literal string
+              $litStr .= $ch;  // collect string for possible error message
+              if ($ch == "\\") {  // handle backslash escaping
+                $litStr .= $parenthTpl[$i + 1];
+                $i++;  // skip next char - never mind which
+                continue;
+              }
+              if ($ch == $strDelimChar) {  // end of string char detected
+                // handle escaping by duplicate delimiter
+                if ($parenthTpl[$i + 1] == $strDelimChar) {
+                  $litStr .= $parenthTpl[$i + 1];
+                  $i++;  // skip duplicate-escaped delimiter
+                  continue;
+                }
+                $strDelimChar = "";
+                $litStr = "";
+              }  // eo final string char
+              continue;
+            }  // eo inside literal string
+
+            if ($ch == '"' || $ch == "'") {  // begin of string detected
+              $strDelimChar = $ch;
+              $litStr = $ch;
+              continue;
+            }
+
+            // count parenthesis +/-
+            if ($ch == "(") { $parenthCount++; }
+            if ($ch == ")") { $parenthCount--; }
+          }  // eo parenthesis sum
+
+          // sanity check that all literal strings are closed
+          // or better say: that detection of litral strings worked fine
+          if ($strDelimChar) {
+            throw new Exception("Unterminated string '{$litStr}' in: $tplOri.");
+          }
 
           // final closing parenthesis reached
           if ($parenthCount <= 0) {
@@ -386,18 +407,22 @@ if (static::$debug) { echo "tpl=$tpl<br>\n"; };
         // sanity check that all parenthesis are closed
         // or better say: that detection of parenthesis worked fine
         if ($parenthCount != 0) {
-          throw new Exception("Closing parenthesis $parenthCount required in: $tplOri.");
+          throw new Exception("Missbalanced parenthesis ({$parenthCount}) part={$parenthTpl} in: $tplOri.");
         }
 
-        // remove leading and trailing parenthesis, otherwise endless loop
+        // if we have a "full enclosed" part then we remove leading and trailing
+        // parenthesis (because of endless loop) and recurse
+        $skipParenthesis = true;
         $parenthTpl = trim($parenthTpl);
-        $parenthTpl = substr($parenthTpl, 1);
-        if (substr($parenthTpl, -1) == ")") {
-          $parenthTpl = substr($parenthTpl, 0, -1);
+        if (substr($parenthTpl, 0, 1) == "(" &&
+            substr($parenthTpl, -1) == ")") {
+          $parenthTpl = substr($parenthTpl, 1, -1);
+          $skipParenthesis = false;
         }
 
         // process parenthesis template as separate template run
-        $part = trim(static::extjSqlWhere($parenthTpl, $whereVals, $req));
+        $part = trim(static::extjSqlWhere($parenthTpl, $whereVals, $req, array("skipParenthesis" => $skipParenthesis)));
+
 
         // if parentesis template processing is not empty
         // then reassign parenthesis and add to sql
@@ -416,7 +441,6 @@ if (static::$debug) { echo "part=$part<br>\n"; };
       $usePart = false;
       preg_match_all("/(:[\-\?\+!>@]*?[a-z_][a-z0-9_]+)/i", $part, $matches);
       $pnams = $matches[1];
-//echo "pnams=";var_export($pnams); echo "<br>";
 
       // if no pnames are present we use that part in any case
       if (count($pnams) == 0) {
@@ -612,8 +636,6 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
       }
       $tplSorter[$key] = $value;
     }
-
-//@file_put_contents("debug.localonly", "tplsorter1=" . var_export($tplSorter, true) . "\n\n", FILE_APPEND);
 
     // if no sort expression is present then fill with default sort
     // if no default sort exists remove sort key
