@@ -52,11 +52,33 @@ class DbRec {
 
 
   /**
+  * Get sql template for given target.
+  */
+  public static function getSqlTpl($target, &$opts = array()) {
+    return "";
+  }  // eo get sql tpl
+
+
+
+
+  /**
   * Get prepared sql string and fill sele vals
   */
   public static function getSql($target, &$seleVals = array(), $req = null) {
-    $tpl = static::getSqlTpl($target);
+
+    $tpl = static::getSqlTpl($target, $tplOpts);
     $sql = OgerExtjs::extjSql($tpl, $seleVals, $req);
+
+    // postprocess template
+    if ($tplOpts['str_replace']) {
+      foreach ((array)$tplOpts['str_replace'] as $search => $replace) {
+        if (!$search) {
+          continue;
+        }
+        $sql = str_replace($search, $replace, $sql);
+      }
+    }
+
     return $sql;
   }  // eo get sql
 
