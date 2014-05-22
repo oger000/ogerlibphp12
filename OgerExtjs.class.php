@@ -336,6 +336,9 @@ class OgerExtjs {
 
       // handle grouping of conditions by parenthesis
       // check for first opening parenthesis
+      // if the skipParenthesis parameter is given we have not a "full enclosed"
+      // WHERE clause but another term that starts with "("
+      // e.g. a subquery like "(SELECT * FROM ..." or something like that
       if (substr(ltrim($part), 0, 1) == "(" && !$opts['skipParenthesis']) {
 
         $parenthTpl = "";
@@ -412,22 +415,24 @@ class OgerExtjs {
 
         // if we have a "full enclosed" part then we remove leading and trailing
         // parenthesis (because of endless loop) and recurse
-        $skipParenthesis = true;
+        $hasInnerParenthesis = true;
         $parenthTpl = trim($parenthTpl);
         if (substr($parenthTpl, 0, 1) == "(" &&
             substr($parenthTpl, -1) == ")") {
           $parenthTpl = substr($parenthTpl, 1, -1);
-          $skipParenthesis = false;
+          $hasInnerParenthesis = false;
         }
 
         // process parenthesis template as separate template run
-        $part = trim(static::extjSqlWhere($parenthTpl, $whereVals, $req, array("skipParenthesis" => $skipParenthesis)));
+        $part = trim(static::extjSqlWhere($parenthTpl, $whereVals, $req, array("skipParenthesis" => $hasInnerParenthesis)));
 
 
         // if parentesis template processing is not empty
         // then reassign parenthesis and add to sql
         if ($part) {
-          $part = "($part)";
+          if ( ! $hasInnerParenthesis) {
+            $part = "($part)";  // we removed enclosing () above, so we have to add back here
+          }
           $sql .= ($sql ? " {$andOrGlue}" : "") . ($kwNOT ? " {$kwNOT}" : "") . " {$part}";
         }
         // handling of current parenthesis part finished
