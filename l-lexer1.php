@@ -7,7 +7,7 @@ $x = file_get_contents($filNam);
 $t = token_get_all($x);
 
 $tx = var_export($t, true);
-//file_put_contents("{$filNam}.lex1.localonly", $tx);
+//file_put_contents("{$filNam}.lex1a.localonly", $tx);
 
 $tx = "";
 foreach ($t as $xTok) {
@@ -24,7 +24,7 @@ foreach ($t as $xTok) {
 }
 
 
-file_put_contents("{$filNam}.lex2.localonly", $tx);
+file_put_contents("{$filNam}.lex1b.localonly", $tx);
 
 
 

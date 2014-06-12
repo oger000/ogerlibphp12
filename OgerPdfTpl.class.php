@@ -33,15 +33,9 @@
 require_once('lib/fpdf/fpdf.php');
 class OgerPdfTok extends FPDF {
 */
-require_once('lib/tcpdf/tcpdf.php');
-class OgerPdfTpl extends TCPDF {
-
-  public $startTime;
-
-  public $tpl = "";
-  public $headerValues = array();
-  public $footerValues = array();
-  public $attribStore = array();
+//require_once('lib/tcpdf/tcpdf.php');
+//class OgerPdfTpl extends TCPDF {
+class OgerPdfTpl {
 
   private static $plainTokenId = "_";
 
@@ -49,11 +43,14 @@ class OgerPdfTpl extends TCPDF {
   /**
   * Constructor.
   */
+  /*
   public function __construct($orientation = 'P', $unit = 'mm', $format = 'A4',           // FPDF
                               $unicode = true, $encoding = 'UTF-8', $diskcace = false) {  // additional parameters for TCPDF
-
     parent::__construct($orientation, $unit, $format, $unicode, $encoding, $diskspace);
-    $this->startTime = time();
+  }  // eo constructor
+  */
+  public function __construct() {
+    //parent::__construct();
   }  // eo constructor
 
 
@@ -61,11 +58,11 @@ class OgerPdfTpl extends TCPDF {
   /**
   * template parser
   */
-  public function parse($tpl) {
+  public function parse($tpl , $rawOut = false) {
 
     $tokenIn = token_get_all($tpl);
 
-    $token = array();
+    $allToken = array();
     foreach ($tokenIn as $tok) {
 
       if (is_string($tok)) {
@@ -77,66 +74,114 @@ class OgerPdfTpl extends TCPDF {
         $idNam = token_name($idNum);
       }
 
-      $token[] = array($idNam, $tokTx);
+      $allToken[] = array($idNam, $tokTx);
     }  // eo unify token
 
-    $tokenBak = $token;
+    if ($rawOut) {
+      return $allToken;
+    }
 
-    $unused = array();
-    while ($tok = array_shift($token)) {
+
+    $allTtokenBak = $allToken;
+    $out = "";
+
+    // filter the tokens
+    while ($tok = array_shift($allToken)) {
       list($idNam, $tokTx) = $tok;
 
-      // filter valid expressions
       switch ($idNam) {
 
-      // raw values
+      // function call and more
+      // TODO definitly MUST be checked for security issues
       case "T_STRING":
-      case "T_WHITESPACE":
+        switch (strtolower($tokTx)) {
+        case "setx":
+        case "write":
+          $out .= $tokTx;
+          break;
+        }
+      break;
+
+      // raw values
       case "T_CONSTANT_ENCAPSED_STRING":
+      case "T_ENCAPSED_AND_WHITESPACE":
       case "T_LNUMBER":
-        $out .= $tokTx;   // TODO check details ???
+        $out .= $tokTx;
         break;
 
-      // common syntax
+      // common syntax (TODO has to be checked for security issues)
       case static::$plainTokenId:
-      case "T_OPEN_TAG":
+        switch (strtolower($tokTx)) {
+        case "\$":  // a single dollar looks like variable variable or variable function call
+          $tokTx = "";
+          break;
+        }
+      $out .= $tokTx;
+      break;
+
+      // common syntax (TODO should be checked for security issues ????)
+      case "T_CURLY_OPEN":
+
+      // harmless common syntax (no need to further checks)
+      case "T_WHITESPACE":
+      case "T_START_HEREDOC":
+      case "T_END_HEREDOC":
+      case "T_DOUBLE_COLON":  // skip ???
+      case "T_IS_EQUAL":
+
       // allowed language features
       case "T_IF":
       case "T_ELSE":
       case "T_FOREACH":
+      case "T_AS":
       case "T_CONTINUE":
 
-      case "T_DOUBLE_COLON":
-      case "T_IS_EQUAL":
+      //case "T_ECHO":
+      case "T_UNSET":
+
         $out .= $tokTx;
         break;
 
-      // disabled language features
+      // skip unwanted known token ids till end and write internal log
       case "T_REQUIRE_ONCE":
       case "T_ECHO":
-      case "T_UNSET":
-        // skip expression
-        $out .= "\n// Skiped expression: {$idNam} => {$tokTx}\n";
-        while (list($idNam, $tokTx) = array_shift($token)) {
+        $tokTx = nl2br($tokTx);
+        $out .= "\n// Skiped: {$idNam} => {$tokTx}";
+        while (list($idNam, $tokTx) = array_shift($allToken)) {
           $tokTx = str_replace(array("\n", "\r"), array("\\n", "\\r"), $tokTx);
-          $out .= "\n// Skiped expression {$idNam} => {$tokTx}\n";
+          $out .= " {$tokTx}";
           if ($idNam == static::$plainTokenId && $tokTx == ";") {
+            $out .= "\n";
             break;
           }
         }
         break;
 
-      // mask variables - only keys in $vals array are allowed
+      // remove variables at all, we use string substitution to get vars into template
+      // remove also curly braces (looks like clurly braces outside strings
+      // have no special id but are treated as "plain" syntax tokens)
       case "T_VARIABLE":
-        $out .= "\$vals['" . substr($tokTx, 1) . "']";
+      case "T_STRING_VARNAME":
+      //case "T_CURLY_OPEN":
+        // OBSOLETED ???? mask variables - only keys in $vals array are allowed
+        //$out .= "\$vals['" . substr($tokTx, 1) . "']";
         break;
 
-      // suppressed
+      case "T_DOLLAR_OPEN_CURLY_BRACES":
+        //$out .= "{\$";
+        $out .= "{";
+        break;
+
+      // skip silently
+      case "T_OPEN_TAG":
       case "T_COMMENT":
+      case "T_EXIT":
         break;
 
+      // skip unknown token ids and write internal log
       default:
-        $out .= "\n// Unused {$idNam}\n";
+        $tokTx = str_replace(array("\n", "\r"), array("\\n", "\\r"), $tokTx);
+        $out .= "\n// Unknown: {$idNam} => {$tokTx}\n";
       }
 
     }  // filter
