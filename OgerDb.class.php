@@ -215,6 +215,10 @@ class OgerDb {
   * Check if values match statement placeholders and prepare sql.
   */
   public static function checkedPrepare($sql, $values = array()) {
+    // if sql is already a prepared statemend, then we return it directly
+    if (is_a($sql, "PDOStatement")) {
+      return $sql;
+    }
     static::checkStmtParams($sql, $values);
     return static::$conn->prepare($sql);
   }  // eo checked prepare
