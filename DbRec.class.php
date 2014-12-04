@@ -67,7 +67,14 @@ class DbRec {
   public static function getSql($target, &$seleVals = array(), $req = null, &$tplOpts = array()) {
 
     $tpl = static::getSqlTpl($target, $tplOpts);
-    $sql = OgerExtjs::extjSql($tpl, $seleVals, $req);
+
+    switch ($tplOpts['parser']) {
+    case "php-sql":
+      $sql = OgerExtjs::extjSqlParser($tpl, $seleVals, $req);
+      break;
+    default:
+      $sql = OgerExtjs::extjSql($tpl, $seleVals, $req);
+    }
 
     // postprocess template
     if ($tplOpts['str_replace']) {
