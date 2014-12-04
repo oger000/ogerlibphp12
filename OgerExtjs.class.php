@@ -471,19 +471,19 @@ if (static::$debug) { echo "part=$part<br>\n"; };
         while ($intCmdLoop) {
 
           // remove colon in final where clause
-          if (substr($pnam, 0, 1) == "-") {
+          if (substr($pnam, 0, 1) == "-") {  // alternate: "="
             $doRemoveColon = true;
             $pnam = substr($pnam, 1);
             continue;
           }
           // test if pnam exists and remove pnam afterwards
-          if (substr($pnam, 0, 1) == "?") {
+          if (substr($pnam, 0, 1) == "?") {  // alternate: "-"
             $doRemovePnam = true;
             $pnam = substr($pnam, 1);
             continue;
           }
           // throw exption if pnam does not exist
-          if (substr($pnam, 0, 1) == "!") {
+          if (substr($pnam, 0, 1) == "!") {  // alternate: ":" ????
             $isRequiredParam = true;
             $pnam = substr($pnam, 1);
             continue;
@@ -497,7 +497,7 @@ if (static::$debug) { echo "part=$part<br>\n"; };
           // use only if not empty (untrimmed)
           // support ">" for backward compability
           if (substr($pnam, 0, 1) == ">" ||
-              substr($pnam, 0, 1) == "@") {
+              substr($pnam, 0, 1) == "@") {  // alternate: "?"
             $valueRequired = true;
             $pnam = substr($pnam, 1);
             continue;
