@@ -70,7 +70,10 @@ class DbRec {
 
     switch ($tplOpts['parser']) {
     case "php-sql":
-      $sql = OgerExtjs::extjSqlParser($tpl, $seleVals, $req);
+      $sql = OgerExtjs::extjSqlPsp($tpl, $seleVals, $req);
+      break;
+    case "php-sql{":  // backward compapility mode
+      $sql = OgerExtjs::extjSqlPspPre($tpl, $seleVals, $req);
       break;
     default:
       $sql = OgerExtjs::extjSql($tpl, $seleVals, $req);
@@ -84,6 +87,11 @@ class DbRec {
         }
         $sql = str_replace($search, $replace, $sql);
       }
+    }
+
+    // optional format
+    if ($tplOpts['beautify']) {
+      $sql = SqlFormatter::format($sql);
     }
 
     return $sql;

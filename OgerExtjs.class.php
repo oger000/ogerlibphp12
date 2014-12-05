@@ -907,7 +907,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function extjSqlParser($tpl, &$seleVals = array(), $req = null) {
+  public static function extjSqlPspPre($tpl, &$seleVals = array(), $req = null) {
 
     if ($seleVals === null) {
       $seleVals = array();
@@ -960,6 +960,29 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
       $tpl = str_replace($ori, $prep, $tpl);
     }  // eo order by
 
+    // real parsing
+    return static::extjSqlPsp($tpl, $seleVals, $req);
+
+  }  // eo prep sql template for parser
+
+
+
+  /**
+  * Prepare sql statement with data from extjs request.
+  * Use external php-sql-parser library from code.google.com ...
+  * WORK IN PROGRESS
+  * @params $tpl: The template containing special sql
+  *         Variables are detectec by the colon (:) prefix.
+  */
+  public static function extjSqlPsp($tpl, &$seleVals = array(), $req = null) {
+
+    if ($seleVals === null) {
+      $seleVals = array();
+    }
+    if ($req === null) {
+      $req = $_REQUEST;
+    }
+
 
     // LIMIT
     $ori = "__EXTJS_LIMIT__";
@@ -969,14 +992,64 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     }  // eo limit
 
 
-    $parser = new PHPSQLParser();
+    // parse and tee-ify
+    $parser = new PHPSQLParser\PHPSQLParser();
     $sqlTree = $parser->parse($tpl);
+//Oger::debugFile(var_export($sqlTree, true));exit;
+
+    static::extjSqlPspProcessTree($sqlTree);
+
+    // create sql from prepared parser tree
+    $creator = new PHPSQLParser\PHPSQLCreator();
+    $sql = $creator->create($sqlTree);
+
+    return $sql;
+  }  // eo prep sql with extjs request
 
 
 
+  /**
+  * Prepare full parsed tree
+  * WORK IN PROGRESS
+  * @params &$tpl: The parsed and tokenized sql template tree
+  */
+  public static function extjSqlPspProcessTree(&$tree) {
 
-return $tpl;
-  }  // eo select with ext
+    static::extjSqlPspSelect($tree['SELECT']);
+
+
+  }  // eo process full tree
+
+
+  /**
+  * Prepare SELECT segment from parsed tree
+  * WORK IN PROGRESS
+  * @params &$segment: The SELECT segment tree.
+  */
+  public static function extjSqlPspSelect(&$parts) {
+
+    foreach ($parts as &$token) {
+      if ($token['sub_tree']) {
+        static::extjSqlPspProcessSubTree($token);
+      }
+    }
+  }  // eo process SELECT segment
+
+
+  /**
+  * Prepare subtree from parsed results
+  * WORK IN PROGRESS
+  * @params &$segment: The subtree token.
+  */
+  public static function extjSqlPspSubtree(&$token) {
+
+    switch ($token['expr_type']) {
+    case "subquery":
+      static::extjSqlPspProcessTree($token['sub_tree']);
+    default:
+      // do nothing
+    }
+  }  // eo process subtree
 
 
 
@@ -987,7 +1060,7 @@ return $tpl;
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function extjSqlWhereParser($tpl, &$whereVals = array(), $req = null, $opts = array()) {
+  public static function extjSqlWherePsp($tpl, &$whereVals = array(), $req = null, $opts = array()) {
 //Oger::debugFile("tpl=$tpl");
 
 
@@ -1311,7 +1384,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
   * WORK IN PROGRESS
   * @params $tpl: The template containing special sql
   */
-  public static function extjSqlOrderByParser($tpl, $req = null) {
+  public static function extjSqlOrderByPsp($tpl, $req = null) {
 
     if ($whereVals === null) {
       $whereVals = array();
@@ -1420,7 +1493,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
   * WORK IN PROGRESS
   * @params $tpl: The template containing special sql
   */
-  public static function extjSqlGroupByParser($tpl, $req = null) {
+  public static function extjSqlGroupByPsp($tpl, $req = null) {
 
     if ($whereVals === null) {
       $whereVals = array();
