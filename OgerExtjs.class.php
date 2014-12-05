@@ -296,7 +296,7 @@ class OgerExtjs {
 
 
     // get extjs filter from request
-    $req['filter'] = self::getStoreFilter(null, $req);
+    $req['filter'] = static::getStoreFilter(null, $req);
     $extFilter = array();
     foreach ((array)$req['filter'] as $colName => $value) {
       $extFilter[$colName] = $value;
@@ -304,7 +304,7 @@ class OgerExtjs {
 
 
     // detect and remove enclosing {}
-    $tpl = self::extjSqlStrip($tpl);
+    $tpl = static::extjSqlStrip($tpl);
 
     // detect, save and remove leading where keyword
     if (preg_match("/^\s*(WHERE|HAVING)\s+/i", $tpl, $matches)) {
@@ -657,7 +657,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     }
 
     // convert sort info from json to array
-    $req['sort'] = self::getStoreSort(null, $req);
+    $req['sort'] = static::getStoreSort(null, $req);
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {
@@ -765,7 +765,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     }
 
     // convert sort info from json to array
-    $req['sort'] = self::getStoreSort(null, $req);
+    $req['sort'] = static::getStoreSort(null, $req);
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {
@@ -826,7 +826,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
       $req = $_REQUEST;
     }
 
-    $sql = self::getStoreLimit(null, null, $req);
+    $sql = static::getStoreLimit(null, null, $req);
     if (strlen($sql) > 0) {
       $sql = "LIMIT $sql";
     }
@@ -907,7 +907,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function extjSqlPspPre($tpl, &$seleVals = array(), $req = null) {
+  public static function extjSqlPspCurly($tpl, &$seleVals = array(), $req = null) {
 
     if ($seleVals === null) {
       $seleVals = array();
@@ -985,6 +985,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
 
     // LIMIT
+    // resolve LIMIT before call to parser - otherwise it is confused
     $ori = "__EXTJS_LIMIT__";
     if (strpos($tpl, $ori) !== false) {
       $prep = static::extjSqlLimit($req);
@@ -997,7 +998,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     $sqlTree = $parser->parse($tpl);
 //Oger::debugFile(var_export($sqlTree, true));exit;
 
-    static::extjSqlPspProcessTree($sqlTree);
+    static::extjSqlPspQuery($sqlTree, $seleVals, $req);
 
     // create sql from prepared parser tree
     $creator = new PHPSQLParser\PHPSQLCreator();
@@ -1009,43 +1010,54 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
 
   /**
-  * Prepare full parsed tree
+  * Prepare full parsed query tree
   * WORK IN PROGRESS
-  * @params &$tpl: The parsed and tokenized sql template tree
+  * @params &$tree: The parsed and tokenized sql template tree
   */
-  public static function extjSqlPspProcessTree(&$tree) {
+  public static function extjSqlPspQuery(&$tree, &$seleVals = array(), $req = null) {) {
 
-    static::extjSqlPspSelect($tree['SELECT']);
+    static::extjSqlPspSubtreeRun($tree['SELECT'], $seleVals, $req);
 
+    static::extjSqlPspSubtreeRun($tree['FROM'], $seleVals, $req);
+
+    static::extjSqlWherePsp($tree['WHERE'], $seleVals, $req);
+    if (!$tree['WHERE']) {
+      unset($tree['WHERE']);
+    }
 
   }  // eo process full tree
 
 
   /**
-  * Prepare SELECT segment from parsed tree
+  * Prepare subtrees within tokens.
   * WORK IN PROGRESS
-  * @params &$segment: The SELECT segment tree.
+  * @params &$tokens: The tokens array.
   */
-  public static function extjSqlPspSelect(&$parts) {
+  public static function extjSqlPspSubtreeRun(&$tokens, &$seleVals = array(), $req = null) {) {
 
-    foreach ($parts as &$token) {
+    foreach ($tokens as $key => &$token) {
       if ($token['sub_tree']) {
-        static::extjSqlPspProcessSubTree($token);
+        static::extjSqlPspSubTree($token, $seleVals, $req);
+        // if token subtree is empty after subtree preparation,
+        // then remove the token at all
+        if (!$token['sub_tree']) {
+          unset($tokens[$key]);
+        }
       }
     }
   }  // eo process SELECT segment
 
 
   /**
-  * Prepare subtree from parsed results
+  * Prepare single subtree token
   * WORK IN PROGRESS
-  * @params &$segment: The subtree token.
+  * @params &$token: The subtree token.
   */
-  public static function extjSqlPspSubtree(&$token) {
+  public static function extjSqlPspSubtree(&$token, &$seleVals = array(), $req = null) {) {
 
     switch ($token['expr_type']) {
     case "subquery":
-      static::extjSqlPspProcessTree($token['sub_tree']);
+      static::extjSqlPspProcessTree($token['sub_tree'], $seleVals, $req);
     default:
       // do nothing
     }
@@ -1054,17 +1066,12 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
 
   /**
-  * Prepare WHERE (or HAVING) clause with data from extjs request.
+  * Prepare WHERE (or HAVING) tree with data from extjs request.
   * WORK IN PROGRESS
-  * Whitespaces are collapsed sometimes, so formating of sql will be lost.
   * @params $tpl: The template containing special sql
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function extjSqlWherePsp($tpl, &$whereVals = array(), $req = null, $opts = array()) {
-//Oger::debugFile("tpl=$tpl");
-
-
-    $tplOri = $tpl;
+  public static function extjSqlWherePsp(&$tokens, &$whereVals = array(), $req = null) {
 
     if ($whereVals === null) {
       $whereVals = array();
@@ -1074,154 +1081,33 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
       $req = $_REQUEST;
     }
 
-
     // get extjs filter from request
-    $req['filter'] = self::getStoreFilter(null, $req);
+    $req['filter'] = static::getStoreFilter(null, $req);
     $extFilter = array();
     foreach ((array)$req['filter'] as $colName => $value) {
       $extFilter[$colName] = $value;
     }  // eo filter item loop
 
 
-    // detect and remove enclosing {}
-    $tpl = self::extjSqlStrip($tpl);
+    $tokensOut = array();
+    $queue = array();
 
-    // detect, save and remove leading where keyword
-    if (preg_match("/^\s*(WHERE|HAVING)\s+/i", $tpl, $matches)) {
-      $kw = $matches[0];
-      $tpl = implode("", explode($kw, $tpl, 2));
-    }  // keyword
+    foreach ($tokens as $key => &$token) {
 
-    // split at and/or boundery (TODO may be problems without leading whitespace)
-    $parts = preg_split("/(\s+OR\s+|\s+AND\s+)/i", $tpl, null, PREG_SPLIT_DELIM_CAPTURE);
-    while (count($parts)) {  // we play with shift/unshift, so do not use foreach
-      $part = array_shift($parts);
+      $uTok = strtoupper($token);
 
-      // detect and/or glue and remember (and reset NOT keyword - detected later)
-      $tmp = strtoupper(trim($part));
-      if ($tmp == "OR" || $tmp == "AND") {
-        $andOrGlue = $part;
-        $kwNOT = "";
-        continue;
+      if ($uTok == "AND" || $uTok == "OR") {
+        $parts[] = $queue;
+        $queue = array();
       }
-
-      // detect leading NOT and remember
-      if (preg_match("/^\s*NOT\s+/i", $part, $matches)) {
-        $kwNOT = strtoupper(trim($matches[0]));
-        $part = implode("", explode($kwNOT, $part, 2));
-      }
+      $queue[] = &$token;
+    }
+    $parts[] = $queue;
 
 
-      $part = trim($part);
-
-      // handle grouping of conditions by parenthesis
-      // check for first opening parenthesis
-      // if the skipParenthesis parameter is given we have not a "full enclosed"
-      // WHERE clause but another term that starts with "("
-      // e.g. a subquery like "(SELECT * FROM ..." or something like that
-      if (substr(ltrim($part), 0, 1) == "(" && !$opts['skipParenthesis']) {
-
-        $parenthTpl = "";
-
-        // put current part back because it is called again
-        array_unshift($parts, $part);
-
-        // loop till closing parenthesis
-        while (count($parts)) {
-
-          $tmpPart = trim(array_shift($parts));
-
-          // add full part
-          $parenthTpl .= ($parenthTpl ? " " : "") . $tmpPart;
-
-          // check parenthesis balance
-          $parenthCount = 0;
-          $strDelimChar = "";
-          $litStr = "";
-
-          for ($i=0; $i < strlen($parenthTpl); $i++) {
-
-            $ch = $parenthTpl[$i];
-
-            // skip literal strings
-            if ($strDelimChar) {  // we are inside a literal string
-              $litStr .= $ch;  // collect string for possible error message
-              if ($ch == "\\") {  // handle backslash escaping
-                $litStr .= $parenthTpl[$i + 1];
-                $i++;  // skip next char - never mind which
-                continue;
-              }
-              if ($ch == $strDelimChar) {  // end of string char detected
-                // handle escaping by duplicate delimiter
-                if ($parenthTpl[$i + 1] == $strDelimChar) {
-                  $litStr .= $parenthTpl[$i + 1];
-                  $i++;  // skip duplicate-escaped delimiter
-                  continue;
-                }
-                $strDelimChar = "";
-                $litStr = "";
-              }  // eo final string char
-              continue;
-            }  // eo inside literal string
-
-            if ($ch == '"' || $ch == "'") {  // begin of string detected
-              $strDelimChar = $ch;
-              $litStr = $ch;
-              continue;
-            }
-
-            // count parenthesis +/-
-            if ($ch == "(") { $parenthCount++; }
-            if ($ch == ")") { $parenthCount--; }
-          }  // eo parenthesis sum
-
-          // sanity check that all literal strings are closed
-          // or better say: that detection of litral strings worked fine
-          if ($strDelimChar) {
-            throw new Exception("Unterminated string '{$litStr}' in: $tplOri.");
-          }
-
-          // final closing parenthesis reached
-          if ($parenthCount <= 0) {
-            break;
-          }
-        }  // eo loop till closing parenthesis
-
-        // sanity check that all parenthesis are closed
-        // or better say: that detection of parenthesis worked fine
-        if ($parenthCount != 0) {
-          throw new Exception("Missbalanced parenthesis ({$parenthCount}) part={$parenthTpl} in: $tplOri.");
-        }
-
-        // if we have a "full enclosed" part then we remove leading and trailing
-        // parenthesis (because of endless loop) and recurse
-        $hasInnerParenthesis = true;
-        $parenthTpl = trim($parenthTpl);
-        if (substr($parenthTpl, 0, 1) == "(" &&
-            substr($parenthTpl, -1) == ")") {
-          $parenthTpl = substr($parenthTpl, 1, -1);
-          $hasInnerParenthesis = false;
-        }
-
-        // process parenthesis template as separate template run
-        $part = trim(static::extjSqlWhere($parenthTpl, $whereVals, $req, array("skipParenthesis" => $hasInnerParenthesis)));
+    foreach ($parts as &$part) {
 
 
-        // if parentesis template processing is not empty
-        // then reassign parenthesis and add to sql
-        if ($part) {
-          if ( ! $hasInnerParenthesis) {
-            $part = "($part)";  // we removed enclosing () above, so we have to add back here
-          }
-          $sql .= ($sql ? " {$andOrGlue}" : "") . ($kwNOT ? " {$kwNOT}" : "") . " {$part}";
-        }
-        // handling of current parenthesis part finished
-        // continue with parts after closing parenthesis
-        continue;
-      }  // parenthesis
-
-
-if (static::$debug) { echo "part=$part<br>\n"; };
       // check if all parameter names for this part are present
       $usePart = false;
       preg_match_all("/(:[\-\?\+!>@]*?[a-z_][a-z0-9_]+)/i", $part, $matches);
@@ -1437,7 +1323,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     }
 
     // convert sort info from json to array
-    $req['sort'] = self::getStoreSort(null, $req);
+    $req['sort'] = static::getStoreSort(null, $req);
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {
@@ -1545,7 +1431,7 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
     }
 
     // convert sort info from json to array
-    $req['sort'] = self::getStoreSort(null, $req);
+    $req['sort'] = static::getStoreSort(null, $req);
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {

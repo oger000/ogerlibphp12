@@ -73,7 +73,7 @@ class DbRec {
       $sql = OgerExtjs::extjSqlPsp($tpl, $seleVals, $req);
       break;
     case "php-sql{":  // backward compapility mode
-      $sql = OgerExtjs::extjSqlPspPre($tpl, $seleVals, $req);
+      $sql = OgerExtjs::extjSqlPspCurly($tpl, $seleVals, $req);
       break;
     default:
       $sql = OgerExtjs::extjSql($tpl, $seleVals, $req);
