@@ -426,7 +426,7 @@ class SqlFormatter
      *
      * @return String The SQL string with HTML styles and formatting wrapped in a <pre> tag
      */
-    public static function format($string, $highlight=true)
+    public static function format($string, $highlight=false)
     {
         // This variable will be populated with formatted html
         $return = '';
