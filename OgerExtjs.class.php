@@ -856,6 +856,58 @@ if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
   }  // eo
 
 
+  /**
+  * Remove clurly brackets from template.
+  * @params $tpl: The template containing special sql
+  */
+  public static function extjSqlClearCurlyTags($tpl) {
+
+    // removes brackets from preg / str-repl mode templates
+    // SELECT
+    if (preg_match("/\{\s*SELECT\s.*?\}/is", $tpl, $matches)) {
+      $ori = $matches[0];
+      $prep = substr($ori, 1, -1);
+      $tpl = str_replace($ori, $prep, $tpl);
+    }  // eo select
+
+    // WHERE
+    if (preg_match_all("/\{\s*WHERE\s.*?\}/is", $tpl, $matches)) {
+      foreach ($matches[0] as $ori) {
+        $prep = substr($ori, 1, -1);
+        $tpl = str_replace($ori, $prep, $tpl);
+      }
+    }  // eo where
+
+
+    // GROUP BY
+    // ATTENTION: extjSqlGroupBy() is totaly untested, so disable by now !!!
+    /*
+    if (preg_match("/\{\s*GROUP\s+BY\s.*?\}/is", $tpl, $matches)) {
+      $ori = $matches[0];
+      $prep = static::extjSqlGroupBy(substr($ori, 1, -1));
+      $tpl = str_replace($ori, $prep, $tpl);
+    }  // eo group by
+    */
+
+    // HAVING
+    if (preg_match("/\{\s*HAVING\s.*?\}/is", $tpl, $matches)) {
+      $ori = $matches[0];
+      $prep = substr($ori, 1, -1);
+      $tpl = str_replace($ori, $prep, $tpl);
+    }  // eo having
+
+    // ORDER BY
+    if (preg_match("/\{\s*ORDER\s+BY\s.*?\}/is", $tpl, $matches)) {
+      $ori = $matches[0];
+      $prep = substr($ori, 1, -1);
+      $tpl = str_replace($ori, $prep, $tpl);
+    }  // eo order by
+
+    // real parsing
+    return $tpl;
+  }  // eo remove curly brackets from template
+
+
   // END OF PREPARE SQL STATEMENT WITH VALUES FROM EXTJS REQUEST - PREG / STR-REPL MODE
   // #######################################################
 

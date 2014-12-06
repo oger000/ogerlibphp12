@@ -70,12 +70,10 @@ class DbRec {
 
     switch ($tplOpts['parser']) {
     case "php-sql":
-    case "php-sql{":  // backward compapility mode
-      $sqlTpl = new OgerExtjSqlTpl($tpl, $seleVals, $req);
-      if ($tplOpts['parser'] == "php-sql{") {
-        $sqlTpl->$curlyMode = true;
-      }
-      $sql = $sqlTpl->prepare();
+      $tpl = OgerExtjs::extjSqlClearCurlyTags($tpl);
+      $sqlTpl = new OgerExtjSqlTpl($req);
+      $sql = $sqlTpl->prepare($tpl);
+      $seleVals = $sqlTpl->getParamValues();
       break;
     default:
       $sql = OgerExtjs::extjSql($tpl, $seleVals, $req);
