@@ -205,13 +205,13 @@ class OgerExtjSqlTpl {
   * Prepare token sequence.
   * @params $sequences: A token sequence.
   */
-  public function prepSequence($sequence) {
+  public function prepSequence($sequence, $whereMode = false) {
 
     $sequenceOut = array();
 
     foreach ($sequence as $key => $token) {
       if ($token['sub_tree']) {
-        $token = $this->prepSubtree($token);
+        $token = $this->prepSubtree($token, $whereMode);
         // if token subtree is empty, then we ignore
         if (!$token['sub_tree']) {
           continue;
@@ -228,7 +228,7 @@ class OgerExtjSqlTpl {
   * Prepare single subtree token
   * @params $token: The subtree token.
   */
-  public function prepSubtree($token) {
+  public function prepSubtree($token, $whereMode = false) {
 
     switch ($token['expr_type']) {
     case "subquery":
@@ -241,6 +241,21 @@ class OgerExtjSqlTpl {
     return $token;
   }  // eo prep subtree
 
+
+  /**
+  * Check if token is AND / OR token of a WHERE clause
+  * @params $token:
+  */
+  public function isAndOrToken($token) {
+
+    if ($token['expr_type'] == "operator") {
+      $uTok = strtoupper($token['base_expr']);
+      if ($uTok == "AND" || $uTok == "OR") {
+        return true;
+      }
+    }
+    return false;
+  }  // eo is and/or token
 
 
   /**
@@ -259,12 +274,9 @@ class OgerExtjSqlTpl {
     // split into AND/OR parts
     foreach ($sequence as $token) {
 
-      if ($token['expr_type'] == "operator") {
-        $uTok = strtoupper($token['base_expr']);
-        if ($uTok == "AND" || $uTok == "OR") {
-          $parts[] = $queue;
-          $queue = array();
-        }
+      if ($this->isAndOrToken($token)) {
+        $parts[] = $queue;
+        $queue = array();
       }
       $queue[] = $token;
     }
@@ -274,17 +286,20 @@ class OgerExtjSqlTpl {
 
 
     $sequenceOut = array();
-    foreach ($parts as $partTokens) {
+    foreach ($parts as $andOrSeq) {
 
       $usePart = true;
       $tmpParamValues = array();
 
-      foreach ($partTokens as $token) {
+      $tmpAndOrSeq = array();
+      foreach ($andOrSeq as $token) {
 
         // we are only interested in named sql params ":xxx"
         if (!($token['expr_type'] == "colref" && substr($token['base_expr'], 0, 1) == ":")) {
-          continue;
+          $tmpAndOrSeq[] = $token;
         }
+
+        // begin prep named sql params
 
         $usePart = false;
         $pnamOri = $token['base_expr'];
@@ -389,51 +404,67 @@ class OgerExtjSqlTpl {
         }
 
 
+        if ($doRemovePnam) {
+          continue;  // next token
+        }
+
         // polish pnam
         if ($doRemoveColon) {
           $pnamOut = $pnam;
         }
-        elseif ($doRemovePnam) {
-          $pnamOut = "";
-        }
         else {
-          $pnamOut = ":{$pnam}";  // reasign colon
+          // reasign colon and remember value
+          $pnamOut = ":{$pnam}";
+          // do not add zombie parameters - they come from elsewhere
+          if (!$isZombieParam) {
+            $tmpParamValues[$pnam] = $value;
+          }
         }
 
         $token['base_expr'] = $pnamOut;
         $token['no_quotes'] = $pnamOut;
 
-        // remember value only if placeholder (:var) remains
-        // do not add zombie parameters - they come from elsewhere
-        if (substr($pnamOut, 0, 1) == ":" && !$isZombieParam) {
-          $tmpParamValues[$pnam] = $value;
-        }
+        $tmpAndOrSeq[] = $token;
+
+        // end prep named sql params
+
       }  // eo loop over all tokens of one part
+      $andOrSeq = $tmpAndOrSeq;
 
       if (!$usePart) {
         continue;
       }
 
       // remove and/or glue if first part of sequence
-      // otherwise preserve
-      $token = array_shift($partTokens);
-      if ($token['expr_type'] == "operator") {
-        $uTok = strtoupper($token['base_expr']);
-        // if not a and/or operator on first position of sequence out
-        // then reassign to part-tokens
-        if (!(count($sequenceOut) == 0 && ($uTok == "AND" || $uTok == "OR"))) {
-          array_unshift($partTokens, $token);
-        }
+      $andOrGlueToken = null;
+      if ($this->isAndOrToken($andOrSeq[0])) {
+        $andOrGlueToken = array_shift($andOrSeq);
       }
+
+      // prep subtrees
+      $tmpAndOrSeq = array();
+      foreach ($andOrSeq as $key => $token) {
+        if ($token['sub_tree']) {
+          $token = $this->prepSubtree($token, $whereMode);
+          // if token subtree is empty, then we ignore
+          if (!$token['sub_tree']) {
+            continue;
+          }
+        }
+        $tmpAndOrSeq[] = $token;
+      }  // eo prep subtoken
+      $andOrSeq = $tmpAndOrSeq;
 
       // do not use empty parts
-// TODO
-      if (!trim($part)) {
-        // $usePart = false;
+      if (!count($andOrSeq) {
+        continue;
       }
 
-      // all tests passed - use part
-      $sequenceOut[] = array_merge($sequenceOut, $partTokens);
+      // all tests passed - use part and remember param values
+      if (count($sequenceOut) > 0) {
+        $sequenceOut[] = $andOrGlueToken;
+      }
+      $sequenceOut[] = array_merge($sequenceOut, $andOrSeq);
       $this->paramValues = array_merge($this->paramValues, $tmpParamValues);
 
     }  // eo loop over all parts
@@ -445,7 +476,6 @@ class OgerExtjSqlTpl {
 
   /**
   * Prepare ORDER BY clause with data from extjs request.
-  * WORK IN PROGRESS
   * @params $tpl: The template containing special sql
   */
   public static function extjSqlOrderByPsp($tpl, $req = null) {
