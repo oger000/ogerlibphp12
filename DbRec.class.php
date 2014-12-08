@@ -92,6 +92,8 @@ class DbRec {
     // optional format
     //if ($tplOpts['beautify']) {
       $sql = SqlFormatter::format($sql);
+      //echo SqlFormatter::format($sql, true); exit;
+      //var_export($sql); exit;
     //}
 
     return $sql;
