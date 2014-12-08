@@ -16,12 +16,13 @@ class OgerExtjSqlTpl {
 
 
   public $request;
-  public $tpl;
-  public $work;
+  public $template;
   public $parsed;
+  public $prepared
   public $sql;
-  public $paramValues;
+  public $paramValues = array();;
 
+  private $tpl;
 
   /*
    * Constructor.
@@ -135,11 +136,14 @@ class OgerExtjSqlTpl {
   */
   public function prepare($tpl, $req = null) {
 
-    $this->tpl = $tpl;
-    $this->work = $tpl;
+    $this->template = $tpl;
 
     if ($req !== null) {
       $this->setRequest($req);
+    }
+    // sanity check / set default
+    if ($this->request === null) {
+      $this->setRequest();
     }
 
     $this->paramValues = array();
@@ -147,134 +151,143 @@ class OgerExtjSqlTpl {
     // LIMIT
     // resolve LIMIT before call to parser - otherwise it is confused
     $ori = "__EXTJS_LIMIT__";
-    if (strpos($this->work, $ori) !== false) {
+    if (strpos($tpl, $ori) !== false) {
       $prep = $this->getStoreLimit();
-      $tpl = str_replace($ori, $prep, $this->work);
+      $tpl = str_replace($ori, $prep, $tpl);
     }  // eo limit
 
 
     // parse and tee-ify
     $parser = new PHPSQLParser\PHPSQLParser();
-    $sqlTree = $parser->parse($this->work);
+    $this->parsed = $parser->parse($tpl);
 //Oger::debugFile(var_export($sqlTree, true));exit;
 
-    static::extjSqlPspQuery($sqlTree, $seleVals, $req);
+    $this->repared = $this->prepQuery($this->parsed);
 
     // create sql from prepared parser tree
     $creator = new PHPSQLParser\PHPSQLCreator();
-    $sql = $creator->create($sqlTree);
+    $this->sql = $creator->create($this->prepared
 
-    return $sql;
+    return $this->sql;
   }  // eo prep sql with extjs request
 
 
 
   /**
   * Prepare full parsed query tree
-  * WORK IN PROGRESS
-  * @params &$tree: The parsed and tokenized sql template tree
+  * @params $tree: Parsed and tokenized sql template tree
   */
-  public static function extjSqlPspQuery(&$tree, &$seleVals = array(), $req = null) {) {
+  public function prepQuery($tree) {
 
-    static::extjSqlPspSubtreeRun($tree['SELECT'], $seleVals, $req);
+    $tree = $this->prepSequence($tree['SELECT']);
 
-    static::extjSqlPspSubtreeRun($tree['FROM'], $seleVals, $req);
+    $tree = $this->prepSequence($tree['FROM']);
 
-    static::extjSqlWherePsp($tree['WHERE'], $seleVals, $req);
+    $tree = $this->prepWhere($tree['WHERE']);
     if (!$tree['WHERE']) {
       unset($tree['WHERE']);
     }
 
+    $tree = $this->prepSequence($tree['GROUP BY']);
+
+    $tree = $this->prepWhere($tree['HAVING']);
+    if (!$tree['HAVING']) {
+      unset($tree['HAVING']);
+    }
+
+    $tree = $this->prepSequence($tree['ORDER BY']);
+
+    return $tree;
   }  // eo process full tree
 
 
   /**
-  * Prepare subtrees within tokens.
-  * WORK IN PROGRESS
-  * @params &$tokens: The tokens array.
+  * Prepare token sequence.
+  * @params $sequences: A token sequence.
   */
-  public static function extjSqlPspSubtreeRun(&$tokens, &$seleVals = array(), $req = null) {) {
+  public function prepSequence($sequence) {
 
-    foreach ($tokens as $key => &$token) {
+    $sequenceOut = array();
+
+    foreach ($sequence as $key => $token) {
       if ($token['sub_tree']) {
-        static::extjSqlPspSubTree($token, $seleVals, $req);
-        // if token subtree is empty after subtree preparation,
-        // then remove the token at all
+        $token = $this->prepSubtree($token);
+        // if token subtree is empty, then we ignore
         if (!$token['sub_tree']) {
-          unset($tokens[$key]);
+          continue;
         }
       }
+      $sequenceOut[] = $token;
     }
+
+    return $sequenceOut;
   }  // eo process SELECT segment
 
 
   /**
   * Prepare single subtree token
-  * WORK IN PROGRESS
-  * @params &$token: The subtree token.
+  * @params $token: The subtree token.
   */
-  public static function extjSqlPspSubtree(&$token, &$seleVals = array(), $req = null) {) {
+  public function prepSubtree($token) {
 
     switch ($token['expr_type']) {
     case "subquery":
-      static::extjSqlPspProcessTree($token['sub_tree'], $seleVals, $req);
+      $token['sub_tree'] = $this->prepQuery($token['sub_tree']);
+      break;
     default:
       // do nothing
     }
-  }  // eo process subtree
+
+    return $token;
+  }  // eo prep subtree
 
 
 
   /**
   * Prepare WHERE (or HAVING) tree with data from extjs request.
-  * WORK IN PROGRESS
-  * @params $tpl: The template containing special sql
+  * @params $sequcence:
   *         Variables are detectec by the colon (:) prefix.
   */
-  public static function extjSqlWherePsp(&$tokens, &$whereVals = array(), $req = null) {
-
-    if ($whereVals === null) {
-      $whereVals = array();
-    }
-
-    if ($req === null) {
-      $req = $_REQUEST;
-    }
+  public function prepWhere($sequence) {
 
     // get extjs filter from request
-    $req['filter'] = static::getStoreFilter(null, $req);
-    $extFilter = array();
-    foreach ((array)$req['filter'] as $colName => $value) {
-      $extFilter[$colName] = $value;
-    }  // eo filter item loop
+    $extFilter = $this->getStoreFilter();
 
-
-    $tokensOut = array();
+    $parts = array();
     $queue = array();
 
-    foreach ($tokens as $key => &$token) {
+    // split into AND/OR parts
+    foreach ($sequence as $token) {
 
-      $uTok = strtoupper($token);
-
-      if ($uTok == "AND" || $uTok == "OR") {
-        $parts[] = $queue;
-        $queue = array();
+      if ($token['expr_type'] == "operator") {
+        $uTok = strtoupper($token['base_expr']);
+        if ($uTok == "AND" || $uTok == "OR") {
+          $parts[] = $queue;
+          $queue = array();
+        }
       }
-      $queue[] = &$token;
+      $queue[] = $token;
     }
-    $parts[] = $queue;
+    if ($queue) {
+      $parts[] = $queue;
+    }
 
 
-    foreach ($parts as &$partTokens) {
+    $sequenceOut = array();
+    foreach ($parts as $partTokens) {
 
       $usePart = true;
+      $tmpParamValues = array();
 
-      foreach ($partTokens as &$partToken) {
+      foreach ($partTokens as $token) {
 
         // we are only interested in named sql params ":xxx"
-        if (substr($partToken, 0, 1) != ":") {
+        if (!($token['expr_type'] == "colref" && substr($token['base_expr'], 0, 1) == ":")) {
           continue;
         }
+
+        $usePart = false;
+        $pnamOri = $token['base_expr'];
 
         // remove leading colon
         $pnam = substr($pnamOri, 1);
@@ -293,7 +306,7 @@ class OgerExtjSqlTpl {
         while ($intCmdLoop) {
 
           // remove colon in final where clause
-          if (substr($pnam, 0, 1) == "-") {  // alternate: "="
+          if (substr($pnam, 0, 1) == "=") {  // alternate: "=", was: "-"
             $doRemoveColon = true;
             $pnam = substr($pnam, 1);
             continue;
@@ -319,7 +332,7 @@ class OgerExtjSqlTpl {
           // use only if not empty (untrimmed)
           // support ">" for backward compability
           if (substr($pnam, 0, 1) == ">" ||
-              substr($pnam, 0, 1) == "@") {  // alternate: "?"
+              substr($pnam, 0, 1) == "@") {  // alternate: ".~"
             $valueRequired = true;
             $pnam = substr($pnam, 1);
             continue;
@@ -327,14 +340,14 @@ class OgerExtjSqlTpl {
 
           $intCmdLoop = false;
         }  // eo internal cmd check
-if (static::$debug) { echo "search for $pnam<br>\n"; };
 
 
         // check if key exists and get value
         //
-        // if pnam already in where vals, then this has peference
-        if (array_key_exists($pnam, $whereVals)) {
-          $value = $whereVals[$pnam];
+        // if pnam already in where vals, then we do nothing
+        if (array_key_exists($pnam, $this->paramValues)) {
+          $value = $this->paramValues[$pnam];
+          // already done
           $usePart = true;
         }
         // otherwise if pnam exists in extjs filter vals then we take this
@@ -343,11 +356,10 @@ if (static::$debug) { echo "search for $pnam<br>\n"; };
           $usePart = true;
         }
         // otherwise if pnam elsewhere in values (request) then we take this
-        elseif (array_key_exists($pnam, $req)) {
-          $value = $req[$pnam];
+        elseif (array_key_exists($pnam, $this->request)) {
+          $value = $this->request[$pnam];
           $usePart = true;
         }
-if (static::$debug) { echo "use $pnam<br>\n"; };
         // handle special internal commands and special cases
         //
         // if param is forced then add part even if pnam not present
@@ -360,7 +372,7 @@ if (static::$debug) { echo "use $pnam<br>\n"; };
         // otherwise check if it is a required param
         // if not present till now throw an exeption
         if ($isRequiredParam && !$usePart) {
-          throw new Exception("Required parameter '$pnam' not in value array for {$tpl}.");
+          throw new Exception("Required parameter '$pnam' not in value array for {$this->template}.");
         }
 
         // otherwise if value is required but not present
@@ -377,7 +389,7 @@ if (static::$debug) { echo "use $pnam<br>\n"; };
         }
 
 
-        // write polished pnam out back to where part
+        // polish pnam
         if ($doRemoveColon) {
           $pnamOut = $pnam;
         }
@@ -385,38 +397,48 @@ if (static::$debug) { echo "use $pnam<br>\n"; };
           $pnamOut = "";
         }
         else {
-          $pnamOut = ":$pnam";  // reasign colon
+          $pnamOut = ":{$pnam}";  // reasign colon
         }
-        $part = str_replace($pnamOri, $pnamOut, $part);
 
-        // remember pnam and value only if placeholder (:var) remains
+        $token['base_expr'] = $pnamOut;
+        $token['no_quotes'] = $pnamOut;
+
+        // remember value only if placeholder (:var) remains
         // do not add zombie parameters - they come from elsewhere
         if (substr($pnamOut, 0, 1) == ":" && !$isZombieParam) {
-          $whereVals[$pnam] = $value;
+          $tmpParamValues[$pnam] = $value;
         }
-      }  // eo pnam loop
+      }  // eo loop over all tokens of one part
+
+      if (!$usePart) {
+        continue;
+      }
+
+      // remove and/or glue if first part of sequence
+      // otherwise preserve
+      $token = array_shift($partTokens);
+      if ($token['expr_type'] == "operator") {
+        $uTok = strtoupper($token['base_expr']);
+        // if not a and/or operator on first position of sequence out
+        // then reassign to part-tokens
+        if (!(count($sequenceOut) == 0 && ($uTok == "AND" || $uTok == "OR"))) {
+          array_unshift($partTokens, $token);
+        }
+      }
 
       // do not use empty parts
+// TODO
       if (!trim($part)) {
-        $usePart = false;
+        // $usePart = false;
       }
-if (static::$debug) { echo "use=$usePart, usedPart=$part<br>\n"; };
 
-      // use part
-      if ($usePart) {
-        $sql .= ($sql ? " {$andOrGlue}" : "") . ($kwNOT ? " {$kwNOT}" : "") . " {$part}";
-      }
-    }  // eo part loop
+      // all tests passed - use part
+      $sequenceOut[] = array_merge($sequenceOut, $partTokens);
+      $this->paramValues = array_merge($this->paramValues, $tmpParamValues);
 
-    // if sql collected then prefix with keyword (and extrablanks to avoid collisions)
-    if ($sql) {
-      // replace escaped AND / OR part-delimiter
-      $sql = preg_replace("/\b\\\\AND\b/", "AND", $sql);
-      $sql = preg_replace("/\b\\\\OR\b/", "OR", $sql);
-      $sql = " {$kw} {$sql} ";
-    }
+    }  // eo loop over all parts
 
-    return $sql;
+    return $sequenceOut;
   }  // eo WHERE with ext
 
 
