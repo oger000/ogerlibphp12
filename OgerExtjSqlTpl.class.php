@@ -122,6 +122,14 @@ class OgerExtjSqlTpl {
   }  // eo get limit
 
 
+  /**
+  * Get values for named sql params
+  */
+  public function getParamValues() {
+    return $this->paramValues;
+  }  // eo get param values
+
+
 
   // #######################################################
   // PREPARE SQL STATEMENT WITH VALUES FROM EXTJS REQUEST
@@ -150,6 +158,7 @@ class OgerExtjSqlTpl {
 
     // LIMIT
     // resolve LIMIT before call to parser - otherwise it is confused
+    // TODO rewrite to php-sql logic
     $ori = "__EXTJS_LIMIT__";
     if (strpos($tpl, $ori) !== false) {
       $prep = $this->getStoreLimit();
@@ -159,14 +168,15 @@ class OgerExtjSqlTpl {
     // parse and tee-ify
     $parser = new PHPSQLParser\PHPSQLParser();
     $this->parsed = $parser->parse($tpl);
-//Oger::debugFile(var_export($tpl, true));
-//Oger::debugFile(var_export($this->parsed, true)); echo "debug+exit"; exit;
+Oger::debugFile(var_export($this->parsed, true));  echo "debug-parsed+exit"; exit;
 
-    $this->repared = $this->prepQuery($this->parsed);
+    $this->prepared = $this->prepQuery($this->parsed);
+//Oger::debugFile(var_export($this->prepared, true)); // echo "debug-prepared+exit"; exit;
 
     // create sql from prepared parser tree
     $creator = new PHPSQLParser\PHPSQLCreator();
     $this->sql = $creator->create($this->prepared);
+//Oger::debugFile(var_export($this->sql, true)); // echo "debug-sql+exit"; exit;
 
     return $this->sql;
   }  // eo prep sql with extjs request
@@ -179,29 +189,29 @@ class OgerExtjSqlTpl {
   */
   public function prepQuery($tree) {
 
-    $tree = $this->prepSequence($tree['SELECT']);
+    $tree['SELECT'] = $this->prepSequence($tree['SELECT']);
 
-    $tree = $this->prepSequence($tree['FROM']);
+    $tree['FROM'] = $this->prepSequence($tree['FROM']);
 
-    $tree = $this->prepWhere($tree['WHERE']);
+    $tree['WHERE'] = $this->prepWhere($tree['WHERE']);
     if (!$tree['WHERE']) {
       unset($tree['WHERE']);
     }
 
-    $tree = $this->prepSequence($tree['GROUP BY']);
+    $tree['GROUP'] = $this->prepSequence($tree['GROUP']);
 
-    $tree = $this->prepWhere($tree['HAVING']);
+    $tree['HAVING'] = $this->prepWhere($tree['HAVING']);
     if (!$tree['HAVING']) {
       unset($tree['HAVING']);
     }
 
-    $tree = $this->prepSequence($tree['ORDER BY']);
-    if (!$tree['ORDER BY']) {
-      unset($tree['ORDER BY']);
+    $tree['ORDER'] = $this->prepSequence($tree['ORDER']);
+    if (!$tree['ORDER']) {
+      unset($tree['ORDER']);
     }
 
     return $tree;
-  }  // eo process full tree
+  }  // eo process full query
 
 
   /**
@@ -212,7 +222,7 @@ class OgerExtjSqlTpl {
 
     $sequenceOut = array();
 
-    foreach ($sequence as $key => $token) {
+    foreach ((array)$sequence as $key => $token) {
       if ($token['sub_tree']) {
         $token = $this->prepSubtree($token, $whereMode);
         // if token subtree is empty, then we ignore
@@ -275,7 +285,7 @@ class OgerExtjSqlTpl {
     $queue = array();
 
     // split into AND/OR parts
-    foreach ($sequence as $token) {
+    foreach ((array)$sequence as $token) {
 
       if ($this->isAndOrToken($token)) {
         $parts[] = $queue;
@@ -481,116 +491,125 @@ class OgerExtjSqlTpl {
   * Prepare ORDER BY clause with data from extjs request.
   * @params $tpl: The template containing special sql
   */
-  public static function extjSqlOrderByPsp($tpl, $req = null) {
+  public function prepOrderBy($sequence) {
 
-    if ($whereVals === null) {
-      $whereVals = array();
-    }
+    $sqlDelimBegin = "`";
+    $sqlDelimEnd = "`";
 
-    if ($req === null) {
-      $req = $_REQUEST;
-    }
+    $sequenceOut = array();
 
+    foreach ($sequence as $token) {
 
-    // detect, save and remove leading where keyword
-    if (preg_match("/^\s*ORDER\s+BY\s+/i", $tpl, $matches)) {
-      $kw = $matches[0];
-      $tpl = implode("", explode($kw, $tpl, 2));
-    }
+      $orderTpl = $token['base_expr'];
 
-
-    // extract extra sort field info from template
-    $parts = explode(";", $tpl);
-//@file_put_contents("debug.localonly", "tpl=$tpl => " . var_export($parts, true) . "\n\n", FILE_APPEND);
-    $tplSorter = array();
-    foreach ((array)$parts as $value) {
-      $value = trim($value);
-      if (!$value) {
+      // check for order template marker
+      if (!(substr($orderTpl, 0, 1) == $sqlDelimBegin &&
+        substr($orderTpl, -1) == $sqlDelimEnd)) {
+        $sequenceOut[] = $token;
         continue;
       }
-      if (strpos($value, "=") !== false) {
-        list($key, $value) = explode("=", $value, 2);
-        $key = trim($key);
+      $orderTpl = trim(substr($orderTpl, 1, -1));
+
+      if (!(substr($orderTpl, 0, 1) == "{" &&
+        substr($orderTpl, -1) == "}")) {
+        $sequenceOut[] = $token;
+        continue;
+      }
+      $orderTpl = trim(substr($orderTpl, 1, -1));
+
+      // extract extra sort field info from template
+      $parts = explode(";", $orderTpl);
+
+      $tplSorter = array();
+      foreach ((array)$parts as $value) {
         $value = trim($value);
-      }
-      else {  // for stand alone colnames sort expression is same as colname
-        $key = $value;
-      }
-      $tplSorter[$key] = $value;
-    }
-
-    // if no sort expression is present then fill with default sort
-    // if no default sort exists remove sort key
-    $defaultSort = $tplSorter[''];
-    foreach($tplSorter as $key => $value) {
-      if (!$value) {
-        if ($defaultSort) {
-          $tplSorter[$key] = $defaultSort;
+        if (!$value) {
+          continue;
         }
-        else {
-          unset($tplSorter[$key]);
+        if (strpos($value, "=") !== false) {
+          list($key, $value) = explode("=", $value, 2);
+          $key = trim($key);
+          $value = trim($value);
+        }
+        else {  // for stand alone colnames sort expression is same as colname
+          $key = $value;
+        }
+        $tplSorter[$key] = $value;
+      }
+
+      // if no sort expression is present then fill with default sort
+      // if no default sort exists remove sort key
+      $defaultSort = $tplSorter[''];
+      foreach($tplSorter as $key => $value) {
+        if (!$value) {
+          if ($defaultSort) {
+            $tplSorter[$key] = $defaultSort;
+          }
+          else {
+            unset($tplSorter[$key]);
+          }
         }
       }
-    }
 
-    // convert sort info from json to array
-    $req['sort'] = static::getStoreSort(null, $req);
+      // loop over sort info from ext
+      $extSort = $this->getStoreSort();
+      foreach ($extSort as $colName => $direct) {
 
-    // loop over sort info from ext
-    foreach ((array)$req['sort'] as $colName => $direct) {
+        $direct = trim(strtoupper($direct));
 
-      if ($direct &&  $direct != "ASC" && $direct != "DESC" && trim($direct) != "") {
-        throw new Exception("Invalid direction '$direct' for column name '$colName' in ExtJS sort.");
-      }
+        if ($direct &&  $direct != "ASC" && $direct != "DESC") {
+          throw new Exception("Invalid direction '$direct' for column name '$colName' in ExtJS sort.");
+        }
 
-      // apply sort expression from template when exists,
-      // otherwise ignore sort request
-      $sortExpr = trim($tplSorter[$colName]);
-      if (!$sortExpr) {
-        continue;
-      }
+        // apply sort expression from template when exists,
+        // otherwise ignore sort request
+        $sortExpr = trim($tplSorter[$colName]);
+        if (!$sortExpr) {
+          continue;
+        }
 
-      // compose sql
-      // if sort direction placeholder exists replace ALL placeholder
-      // otherwise append direction if given
-      $tmpSql = $sortExpr;
-      if (strpos($tmpSql, "__EXTJS_DIRECTION__") !== false) {
-        $tmpSql = str_replace("__EXTJS_DIRECTION__", $direct, $tmpSql);
-      }
-      elseif($direct) {
-        $tmpSql .= " $direct";
-      }
+        // compose sql
+        // if sort direction placeholder exists replace ALL placeholder
+        // otherwise append direction if given
+        $tmpSql = $sortExpr;
+        if (strpos($tmpSql, "__EXTJS_DIRECTION__") !== false) {
+          $tmpSql = str_replace("__EXTJS_DIRECTION__", $direct, $tmpSql);
+        }
+        elseif ($direct) {
+          $tmpSql .= " {$direct}";
+        }
 
-      $sql .= ($sql ? "," : "") . $tmpSql;
+      /* expected result
+        array (
+          'expr_type' => 'colref',
+          'base_expr' => 'field3',
+          'no_quotes' =>
+          array (
+            'delim' => false,
+            'parts' =>
+            array (
+              0 => 'field3',
+            ),
+          ),
+          'sub_tree' => false,
+          'direction' => 'DESC',
+        ),
+      */
 
-    }  // eo ext sort item loop
+      }  // eo ext sort item loop
 
-    $sql = trim($sql);
+    }  // eo token loop
 
-    // if no order-by sql is composed, then use the template default sort
-    // but remove direction placeholder fist
-    if (!$sql && $defaultSort) {
-      $sql = str_replace("__EXTJS_DIRECTION__", "", $defaultSort);
-    }
-
-
-    // if sql collected then prefix with keyword
-    if ($sql) {
-      $sql = " {$kw} {$sql} ";
-    }
-
-
-    return $sql;
+    return $sequenceOut;
   }  // eo ORDER BY with ext
 
 
 
   /**
   * Prepare GROUP BY clause with data from extjs request.
-  * WORK IN PROGRESS
   * @params $tpl: The template containing special sql
   */
-  public static function extjSqlGroupByPsp($tpl, $req = null) {
+  public static function prepGroupBy($tpl, $req = null) {
 
     if ($whereVals === null) {
       $whereVals = array();
@@ -668,8 +687,6 @@ class OgerExtjSqlTpl {
       elseif($direct) {
         $tmpSql .= " $direct";
       }
-
-      $sql .= ($sql ? "," : "") . $tmpSql;
 
     }  // eo ext sort item loop
 
