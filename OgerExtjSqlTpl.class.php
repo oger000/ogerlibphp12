@@ -153,14 +153,14 @@ class OgerExtjSqlTpl {
     $ori = "__EXTJS_LIMIT__";
     if (strpos($tpl, $ori) !== false) {
       $prep = $this->getStoreLimit();
-      $tpl = str_replace($ori, $prep, $tpl);
+//      $tpl = str_replace($ori, $prep, $tpl);
     }  // eo limit
 
 
     // parse and tee-ify
     $parser = new PHPSQLParser\PHPSQLParser();
     $this->parsed = $parser->parse($tpl);
-//Oger::debugFile(var_export($sqlTree, true));exit;
+Oger::debugFile(var_export($sqlTree, true));exit;
 
     $this->repared = $this->prepQuery($this->parsed);
 
@@ -196,6 +196,9 @@ class OgerExtjSqlTpl {
     }
 
     $tree = $this->prepSequence($tree['ORDER BY']);
+    if (!$tree['ORDER BY']) {
+      unset($tree['ORDER BY']);
+    }
 
     return $tree;
   }  // eo process full tree

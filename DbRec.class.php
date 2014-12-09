@@ -69,7 +69,7 @@ class DbRec {
     $tpl = static::getSqlTpl($target, $tplOpts);
 
     switch ($tplOpts['parser']) {
-    case "php-sql":
+    case "php-sql-XXX":  // disable parser call in master branch
       $tpl = OgerExtjs::extjSqlClearCurlyTags($tpl);
       $sqlTpl = new OgerExtjSqlTpl($req);
       $sql = $sqlTpl->prepare($tpl);
@@ -89,12 +89,8 @@ class DbRec {
       }
     }
 
-    // optional format
-    //if ($tplOpts['beautify']) {
-      $sql = SqlFormatter::format($sql);
-      //echo SqlFormatter::format($sql, true); exit;
-      //var_export($sql); exit;
-    //}
+    // format / beautify sql
+    $sql = SqlFormatter::format($sql);
 
     return $sql;
   }  // eo get sql
