@@ -69,7 +69,7 @@ class DbRec {
     $tpl = static::getSqlTpl($target, $tplOpts);
 
     switch ($tplOpts['parser']) {
-    case "php-sql-XXX":  // disable parser call in master branch
+    case "php-sql":
       $tpl = OgerExtjs::extjSqlClearCurlyTags($tpl);
       $sqlTpl = new OgerExtjSqlTpl($req);
       $sql = $sqlTpl->prepare($tpl);

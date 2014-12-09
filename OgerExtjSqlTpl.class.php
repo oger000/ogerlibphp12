@@ -18,9 +18,9 @@ class OgerExtjSqlTpl {
   public $request;
   public $template;
   public $parsed;
-  public $prepared
+  public $prepared;
   public $sql;
-  public $paramValues = array();;
+  public $paramValues = array();
 
   private $tpl;
 
@@ -54,7 +54,7 @@ class OgerExtjSqlTpl {
     $prop = $this->request['filter'];
 
     // not present or empty
-    if (!$prop]) {
+    if (!$prop) {
       return array();
     }
 
@@ -82,7 +82,7 @@ class OgerExtjSqlTpl {
     $prop = $this->request['sort'];
 
     // not present or empty
-    if (!$prop]) {
+    if (!$prop) {
       return array();
     }
 
@@ -160,13 +160,13 @@ class OgerExtjSqlTpl {
     // parse and tee-ify
     $parser = new PHPSQLParser\PHPSQLParser();
     $this->parsed = $parser->parse($tpl);
-Oger::debugFile(var_export($sqlTree, true));exit;
+Oger::debugFile(var_export($sqlTree, true)); echo "debug+exit"; exit;
 
     $this->repared = $this->prepQuery($this->parsed);
 
     // create sql from prepared parser tree
     $creator = new PHPSQLParser\PHPSQLCreator();
-    $this->sql = $creator->create($this->prepared
+    $this->sql = $creator->create($this->prepared);
 
     return $this->sql;
   }  // eo prep sql with extjs request
@@ -459,7 +459,7 @@ Oger::debugFile(var_export($sqlTree, true));exit;
       $andOrSeq = $tmpAndOrSeq;
 
       // do not use empty parts
-      if (!count($andOrSeq) {
+      if (!count($andOrSeq)) {
         continue;
       }
 
