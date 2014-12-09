@@ -168,7 +168,7 @@ class OgerExtjSqlTpl {
     // parse and tee-ify
     $parser = new PHPSQLParser\PHPSQLParser();
     $this->parsed = $parser->parse($tpl);
-Oger::debugFile(var_export($this->parsed, true));  echo "debug-parsed+exit"; exit;
+//Oger::debugFile(var_export($this->parsed, true));  echo "debug-parsed+exit"; exit;
 
     $this->prepared = $this->prepQuery($this->parsed);
 //Oger::debugFile(var_export($this->prepared, true)); // echo "debug-prepared+exit"; exit;
@@ -189,26 +189,40 @@ Oger::debugFile(var_export($this->parsed, true));  echo "debug-parsed+exit"; exi
   */
   public function prepQuery($tree) {
 
-    $tree['SELECT'] = $this->prepSequence($tree['SELECT']);
-
-    $tree['FROM'] = $this->prepSequence($tree['FROM']);
-
-    $tree['WHERE'] = $this->prepWhere($tree['WHERE']);
-    if (!$tree['WHERE']) {
-      unset($tree['WHERE']);
+    if ($tree['SELECT']) {
+      $tree['SELECT'] = $this->prepSequence($tree['SELECT']);
     }
 
-    $tree['GROUP'] = $this->prepSequence($tree['GROUP']);
-
-    $tree['HAVING'] = $this->prepWhere($tree['HAVING']);
-    if (!$tree['HAVING']) {
-      unset($tree['HAVING']);
+    if ($tree['FROM']) {
+      $tree['FROM'] = $this->prepSequence($tree['FROM']);
     }
 
-    $tree['ORDER'] = $this->prepSequence($tree['ORDER']);
-    if (!$tree['ORDER']) {
-      unset($tree['ORDER']);
+    if ($tree['WHERE']) {
+      $tree['WHERE'] = $this->prepWhere($tree['WHERE']);
+      if (!$tree['WHERE']) {
+        unset($tree['WHERE']);
+      }
     }
+
+    if ($tree['GROUP']) {
+      $tree['GROUP'] = $this->prepSequence($tree['GROUP']);
+    }
+
+    if ($tree['HAVING']) {
+      $tree['HAVING'] = $this->prepWhere($tree['HAVING']);
+      if (!$tree['HAVING']) {
+        unset($tree['HAVING']);
+      }
+    }
+
+    if ($tree['ORDER']) {
+      $tree['ORDER'] = $this->prepSequence($tree['ORDER']);
+      if (!$tree['ORDER']) {
+        unset($tree['ORDER']);
+      }
+    }
+
+    // LIMIT
 
     return $tree;
   }  // eo process full query
@@ -310,6 +324,7 @@ Oger::debugFile(var_export($this->parsed, true));  echo "debug-parsed+exit"; exi
         // we are only interested in named sql params ":xxx"
         if (!($token['expr_type'] == "colref" && substr($token['base_expr'], 0, 1) == ":")) {
           $tmpAndOrSeq[] = $token;
+          continue;
         }
 
         // begin prep named sql params
@@ -477,7 +492,7 @@ Oger::debugFile(var_export($this->parsed, true));  echo "debug-parsed+exit"; exi
       if (count($sequenceOut) > 0) {
         $sequenceOut[] = $andOrGlueToken;
       }
-      $sequenceOut[] = array_merge($sequenceOut, $andOrSeq);
+      $sequenceOut = array_merge($sequenceOut, $andOrSeq);
       $this->paramValues = array_merge($this->paramValues, $tmpParamValues);
 
     }  // eo loop over all parts
