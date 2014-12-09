@@ -153,14 +153,14 @@ class OgerExtjSqlTpl {
     $ori = "__EXTJS_LIMIT__";
     if (strpos($tpl, $ori) !== false) {
       $prep = $this->getStoreLimit();
-//      $tpl = str_replace($ori, $prep, $tpl);
+      $tpl = str_replace($ori, $prep, $tpl);
     }  // eo limit
-
 
     // parse and tee-ify
     $parser = new PHPSQLParser\PHPSQLParser();
     $this->parsed = $parser->parse($tpl);
-Oger::debugFile(var_export($sqlTree, true)); echo "debug+exit"; exit;
+//Oger::debugFile(var_export($tpl, true));
+//Oger::debugFile(var_export($this->parsed, true)); echo "debug+exit"; exit;
 
     $this->repared = $this->prepQuery($this->parsed);
 
