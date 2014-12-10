@@ -22,7 +22,7 @@ class OgerExtjSqlTpl {
   public $sql;
   public $paramValues = array();
 
-  private $tpl;
+  public static $devDebug = false;
 
   /*
    * Constructor.
@@ -143,6 +143,10 @@ class OgerExtjSqlTpl {
   *         Variables are detectec by the colon (:) prefix.
   */
   public function prepare($tpl, $req = null) {
+static::$devDebug = true;
+if (static::$devDebug) {
+  Oger::debugFile("template = {$tpl}");
+}
 
     $this->template = $tpl;
 
@@ -168,15 +172,22 @@ class OgerExtjSqlTpl {
     // parse and tee-ify
     $parser = new PHPSQLParser\PHPSQLParser();
     $this->parsed = $parser->parse($tpl);
-//Oger::debugFile(var_export($this->parsed, true));  echo "debug-parsed+exit"; exit;
+if (static::$devDebug) {
+  Oger::debugFile("parsed=\n" . var_export($this->parsed, true));
+}
 
     $this->prepared = $this->prepQuery($this->parsed);
-//Oger::debugFile(var_export($this->prepared, true)); // echo "debug-prepared+exit"; exit;
+if (static::$devDebug) {
+  Oger::debugFile("prepared=\n" . var_export($this->prepared, true));
+}
 
     // create sql from prepared parser tree
     $creator = new PHPSQLParser\PHPSQLCreator();
     $this->sql = $creator->create($this->prepared);
-//Oger::debugFile(var_export($this->sql, true)); // echo "debug-sql+exit"; exit;
+if (static::$devDebug) {
+  Oger::debugFile(var_export($this->sql, true));
+  exit;
+}
 
     return $this->sql;
   }  // eo prep sql with extjs request
@@ -508,8 +519,8 @@ class OgerExtjSqlTpl {
   */
   public function prepOrderBy($sequence) {
 
-    $sqlDelimBegin = "`";
-    $sqlDelimEnd = "`";
+    $sqlEncBegin = "`";
+    $sqlEncEnd = "`";
 
     $sequenceOut = array();
 
@@ -518,8 +529,8 @@ class OgerExtjSqlTpl {
       $orderTpl = $token['base_expr'];
 
       // check for order template marker
-      if (!(substr($orderTpl, 0, 1) == $sqlDelimBegin &&
-        substr($orderTpl, -1) == $sqlDelimEnd)) {
+      if (!(substr($orderTpl, 0, 1) == $sqlEncBegin &&
+        substr($orderTpl, -1) == $sqlEncEnd)) {
         $sequenceOut[] = $token;
         continue;
       }
