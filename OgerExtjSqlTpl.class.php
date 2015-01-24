@@ -13,7 +13,7 @@ class OgerExtjSqlTpl {
   /// Debug flag.
   //public static $debug = true;
   public static $debug = false;
-
+  public static $devDebug = false;
 
   public $request;
   public $template;
@@ -22,7 +22,8 @@ class OgerExtjSqlTpl {
   public $sql;
   public $paramValues = array();
 
-  public static $devDebug = false;
+  public static $sqlEncBegin = "`";
+  public static $sqlEncEnd = "`";
 
   /*
    * Constructor.
@@ -143,7 +144,7 @@ class OgerExtjSqlTpl {
   *         Variables are detectec by the colon (:) prefix.
   */
   public function prepare($tpl, $req = null) {
-static::$devDebug = true;
+static::$devDebug = false;
 if (static::$devDebug) {
   Oger::debugFile("template = {$tpl}");
 }
@@ -174,6 +175,7 @@ if (static::$devDebug) {
     $this->parsed = $parser->parse($tpl);
 if (static::$devDebug) {
   Oger::debugFile("parsed=\n" . var_export($this->parsed, true));
+//  exit;
 }
 
     $this->prepared = $this->prepQuery($this->parsed);
@@ -186,7 +188,7 @@ if (static::$devDebug) {
     $this->sql = $creator->create($this->prepared);
 if (static::$devDebug) {
   Oger::debugFile(var_export($this->sql, true));
-  exit;
+//  exit;
 }
 
     return $this->sql;
@@ -233,7 +235,8 @@ if (static::$devDebug) {
       }
     }
 
-    // LIMIT
+    if ($tree['LIMIT']) {
+    }
 
     return $tree;
   }  // eo process full query
@@ -243,13 +246,13 @@ if (static::$devDebug) {
   * Prepare token sequence.
   * @params $sequences: A token sequence.
   */
-  public function prepSequence($sequence, $whereMode = false) {
+  public function prepSequence($sequence) {
 
     $sequenceOut = array();
 
     foreach ((array)$sequence as $key => $token) {
       if ($token['sub_tree']) {
-        $token = $this->prepSubtree($token, $whereMode);
+        $token = $this->prepSubtree($token);
         // if token subtree is empty, then we ignore
         if (!$token['sub_tree']) {
           continue;
@@ -269,11 +272,23 @@ if (static::$devDebug) {
   public function prepSubtree($token, $whereMode = false) {
 
     switch ($token['expr_type']) {
+    case "aggregate_function":
+      // TODO
+      break;
+    case "bracket_expression":
+      if ($whereMode) {
+        $token['sub_tree'] = $this->prepWhere($token['sub_tree']);
+      }
+      else {
+        //throw new Exception("Found bracket_expression in prepSubtree mode without whereMode.");
+        // do nothing
+      }
+      break;
     case "subquery":
       $token['sub_tree'] = $this->prepQuery($token['sub_tree']);
       break;
     default:
-      // do nothing
+      throw new Exception("Unknown prepSubtree mode: {$token['expr_type']}.");
     }
 
     return $token;
@@ -332,67 +347,82 @@ if (static::$devDebug) {
       $tmpAndOrSeq = array();
       foreach ($andOrSeq as $token) {
 
-        // we are only interested in named sql params ":xxx"
-        if (!($token['expr_type'] == "colref" && substr($token['base_expr'], 0, 1) == ":")) {
+        // we are only interested in named sql params ":?xxx" or "`:?xxx`"
+        if (!($token['expr_type'] == "colref" &&
+              (substr($token['base_expr'], 0, 2) == ":?") ||
+               (substr($token['base_expr'], 0, 3) == static::$sqlEncBegin . ":?" &&
+                substr($token['base_expr'], -1) == static::$sqlEncEnd)
+             )
+           ) {
           $tmpAndOrSeq[] = $token;
           continue;
         }
 
         // begin prep named sql params
-
         $usePart = false;
         $pnamOri = $token['base_expr'];
+        $pnamOriUnenc = $pnamOri;
+        $isEnc = false;
 
-        // remove leading colon
-        $pnam = substr($pnamOri, 1);
+        if (substr($pnamOri, 0, 1) == static::$sqlEncBegin && substr($pnamOri, -1) == static::$sqlEncEnd) {
+          $pnamOriUnenc = substr($pnamOri, 1, -1);
+          $isEnc = true;
+        }
+
+        // remove leading ":?"
+        $pnam = substr($pnamOriUnenc, 2);
 
         // detect internal commands in first char
         $doRemoveColon = false;
         $doRemovePnam = false;
-        $isRequiredParam = false;
-        $doForceAddParam = false;
-        $isZombieParam = false;
-        $valueRequired = false;
+        $isRequiredParam = false;  // obsoleted for now
+        $doForceAddParam = false;  // obsoleted
+        $isZombieParam = false;  // obsoleted (followup to doForceAddParam)
+        $onlyIfHasValue = false;
         //$trimmedValueRequired = false;
 
-        // loop over internal command prefix
-        $intCmdLoop = true;
-        while ($intCmdLoop) {
+        // loop over internal command chars
+        $cmdCharLoop = true;
+        while ($cmdCharLoop) {
 
           // remove colon in final where clause
-          if (substr($pnam, 0, 1) == "=") {  // alternate: "=", was: "-"
+          if (substr($pnam, 0, 1) == "=") {  // was: "-"
             $doRemoveColon = true;
             $pnam = substr($pnam, 1);
             continue;
           }
           // test if pnam exists and remove pnam afterwards
-          if (substr($pnam, 0, 1) == "?") {  // alternate: "-"
+          if (substr($pnam, 0, 1) == "-") {  // was: "?"
             $doRemovePnam = true;
             $pnam = substr($pnam, 1);
             continue;
           }
-          // throw exption if pnam does not exist
-          if (substr($pnam, 0, 1) == "!") {  // alternate: ":" ????
+          // throw exption if pnam does not exist -> delegated to execute?
+          /*
+          if (substr($pnam, 0, 1) == "^") {  // was: "!"
             $isRequiredParam = true;
             $pnam = substr($pnam, 1);
             continue;
           }
+          */
           // add pnam even if not exits in value arra
-          if (substr($pnam, 0, 1) == "+") {
+          // obsolete, because of the ":?" syntax
+          /*
+          if (substr($pnam, 0, 1) == "?") {
             $doForceAddParam = true;
             $pnam = substr($pnam, 1);
             continue;
           }
-          // use only if not empty (untrimmed)
-          // support ">" for backward compability
-          if (substr($pnam, 0, 1) == ">" ||
-              substr($pnam, 0, 1) == "@") {  // alternate: ".~"
-            $valueRequired = true;
+          */
+          // use only if not empty (untrimmed) (but may be trimmed when doing global request preparing)
+          // TODO extra cmd-char for: not-empty (trimmed) ???
+          if (substr($pnam, 0, 1) == "+") {  // alternate: "~" or "#"
+            $onlyIfHasValue = true;
             $pnam = substr($pnam, 1);
             continue;
           }
 
-          $intCmdLoop = false;
+          $cmdCharLoop = false;
         }  // eo internal cmd check
 
 
@@ -431,7 +461,7 @@ if (static::$devDebug) {
 
         // otherwise if value is required but not present
         // then exlude if value is not present
-        if ($valueRequired && !$value) {
+        if ($onlyIfHasValue && !$value) {
           $usePart = false;
           break;
         }
@@ -484,7 +514,7 @@ if (static::$devDebug) {
       $tmpAndOrSeq = array();
       foreach ($andOrSeq as $key => $token) {
         if ($token['sub_tree']) {
-          $token = $this->prepSubtree($token, $whereMode);
+          $token = $this->prepSubtree($token, true);
           // if token subtree is empty, then we ignore
           if (!$token['sub_tree']) {
             continue;
@@ -519,9 +549,6 @@ if (static::$devDebug) {
   */
   public function prepOrderBy($sequence) {
 
-    $sqlEncBegin = "`";
-    $sqlEncEnd = "`";
-
     $sequenceOut = array();
 
     foreach ($sequence as $token) {
@@ -529,8 +556,8 @@ if (static::$devDebug) {
       $orderTpl = $token['base_expr'];
 
       // check for order template marker
-      if (!(substr($orderTpl, 0, 1) == $sqlEncBegin &&
-        substr($orderTpl, -1) == $sqlEncEnd)) {
+      if (!(substr($orderTpl, 0, 1) == static::$sqlEncBegin &&
+        substr($orderTpl, -1) == static::$sqlEncEnd)) {
         $sequenceOut[] = $token;
         continue;
       }
