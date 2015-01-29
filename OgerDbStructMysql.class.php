@@ -36,6 +36,10 @@
   *   - maybe cleanupTableIndex, refreshTableIndex
   *     has to check that an index for autoInc columns remain ???
   */
+/* MEMO
+ * - temporary disable constraint checking
+ *   SET foreign_key_checks = 0;
+ */
 class OgerDbStructMysql extends OgerDbStruct {
 
 
