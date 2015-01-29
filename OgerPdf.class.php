@@ -48,23 +48,14 @@ class OgerPdf extends TCPDF {
   /**
   * Clip cell at given width
   */
-  /*
-  public function ogerClippedCell($width, $height, $text, $border = 0, $ln = 0, $align = '', $fill = 0, $link = null) {
+  //              Cell($w, $h=0, $txt='', $border=0, $ln=0, $align='', $fill=false, $link='', $stretch=0, $ignore_min_height=false, $calign='T', $valign='M')
+  public function Cell($w, $h=0, $txt='', $border=0, $ln=0, $align='', $fill=false, $link='', $stretch=0, $ignore_min_height=false, $calign='T', $valign='M' ) {
 
-    while (strlen($text) > 0 && parent::GetStringWidth($text) > $width) {
-      $text = substr($text, 0, -1);
+    while (strlen($txt) > 0 && parent::GetStringWidth($txt) > $w) {
+      $txt = substr($txt, 0, -1);
     }
 
-    parent::Cell($width, $height, $text, $border, $ln, $align, $fill, $link);
-  }  // eo clipped cell
-  */
-  public function Cell($width, $height, $text, $border = 0, $ln = 0, $align = '', $fill = 0, $link = null) {
-
-    while (strlen($text) > 0 && parent::GetStringWidth($text) > $width) {
-      $text = substr($text, 0, -1);
-    }
-
-    parent::Cell($width, $height, $text, $border, $ln, $align, $fill, $link);
+    parent::Cell($w, $h, $txt, $border, $ln, $align, $fill, $link);
   }  // eo clipped cell
 
 
