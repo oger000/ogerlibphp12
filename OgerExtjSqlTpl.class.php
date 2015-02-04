@@ -14,6 +14,7 @@ class OgerExtjSqlTpl {
   //public static $debug = true;
   public static $debug = false;
   public static $devDebug = false;
+  public static $devDebug2 = false;
 
   public $request;
   public $template;
@@ -108,18 +109,19 @@ class OgerExtjSqlTpl {
   */
   public function getStoreLimit() {
 
-   // no limit or limit is empty or non-numeric
-    if (!array_key_exists("limit", $this->request) || !is_numeric($this->request['limit'])) {
-      return "";
-    }
-    $limit = "" . intval($this->request['limit']);
-
-    // start only makes sense, if limit is present
-    if (array_key_exists("start", $this->request) && is_numeric($this->request['start'])) {
-      $limit = "" . intval($this->request['start']) . ",{$limit}";
+   // only numeric limit params are treated valid
+   $limit = 0;
+    if (array_key_exists("limit", $this->request) && is_numeric($this->request['limit'])) {
+      $limit = "" . intval($this->request['limit']);
     }
 
-    return $limit;
+   // only numeric start params are treated valid
+    $start = 0;
+    if ($limit && array_key_exists("start", $this->request) && is_numeric($this->request['start'])) {
+      $start = intval($this->request['start']);
+    }
+
+    return array("start" => $start, "limit" => $limit);
   }  // eo get limit
 
 
@@ -144,7 +146,8 @@ class OgerExtjSqlTpl {
   *         Variables are detectec by the colon (:) prefix.
   */
   public function prepare($tpl, $req = null) {
-static::$devDebug = false;
+static::$devDebug = true;
+static::$devDebug2 = true;
 if (static::$devDebug) {
   Oger::debugFile("template = {$tpl}");
 }
@@ -161,34 +164,25 @@ if (static::$devDebug) {
 
     $this->paramValues = array();
 
-    // LIMIT
-    // resolve LIMIT before call to parser - otherwise it is confused
-    // TODO rewrite to php-sql logic
-    $ori = "__EXTJS_LIMIT__";
-    if (strpos($tpl, $ori) !== false) {
-      $prep = $this->getStoreLimit();
-      $tpl = str_replace($ori, $prep, $tpl);
-    }  // eo limit
-
-    // parse and tee-ify
+    // parse and tree-ify
     $parser = new PHPSQLParser\PHPSQLParser();
     $this->parsed = $parser->parse($tpl);
 if (static::$devDebug) {
   Oger::debugFile("parsed=\n" . var_export($this->parsed, true));
-//  exit;
 }
 
     $this->prepared = $this->prepQuery($this->parsed);
 if (static::$devDebug) {
   Oger::debugFile("prepared=\n" . var_export($this->prepared, true));
+//  exit;
 }
 
     // create sql from prepared parser tree
     $creator = new PHPSQLParser\PHPSQLCreator();
     $this->sql = $creator->create($this->prepared);
-if (static::$devDebug) {
+if (static::$devDebug2) {
   Oger::debugFile(var_export($this->sql, true));
-//  exit;
+  exit;
 }
 
     return $this->sql;
@@ -218,7 +212,7 @@ if (static::$devDebug) {
     }
 
     if ($tree['GROUP']) {
-      $tree['GROUP'] = $this->prepSequence($tree['GROUP']);
+      $tree['GROUP'] = $this->prepGroupBy($tree['GROUP']);
     }
 
     if ($tree['HAVING']) {
@@ -229,13 +223,17 @@ if (static::$devDebug) {
     }
 
     if ($tree['ORDER']) {
-      $tree['ORDER'] = $this->prepSequence($tree['ORDER']);
+      $tree['ORDER'] = $this->prepOrderBy($tree['ORDER']);
       if (!$tree['ORDER']) {
         unset($tree['ORDER']);
       }
     }
 
     if ($tree['LIMIT']) {
+      $tree['LIMIT'] = $this->prepLimit($tree['LIMIT']);
+      if (!$tree['LIMIT']) {
+        unset($tree['LIMIT']);
+      }
     }
 
     return $tree;
@@ -349,10 +347,7 @@ if (static::$devDebug) {
 
         // we are only interested in named sql params ":?xxx" or "`:?xxx`"
         if (!($token['expr_type'] == "colref" &&
-              (substr($token['base_expr'], 0, 2) == ":?") ||
-               (substr($token['base_expr'], 0, 3) == static::$sqlEncBegin . ":?" &&
-                substr($token['base_expr'], -1) == static::$sqlEncEnd)
-             )
+              substr($this->unEnc($token['base_expr']), 0, 2) == ":?")
            ) {
           $tmpAndOrSeq[] = $token;
           continue;
@@ -364,8 +359,8 @@ if (static::$devDebug) {
         $pnamOriUnenc = $pnamOri;
         $isEnc = false;
 
-        if (substr($pnamOri, 0, 1) == static::$sqlEncBegin && substr($pnamOri, -1) == static::$sqlEncEnd) {
-          $pnamOriUnenc = substr($pnamOri, 1, -1);
+        if ($this->isEnc($pnamOri)) {
+          $pnamOriUnenc = $this->unEnc($pnamOri);
           $isEnc = true;
         }
 
@@ -546,113 +541,109 @@ if (static::$devDebug) {
   /**
   * Prepare ORDER BY clause with data from extjs request.
   * @params $tpl: The template containing special sql
+  * Info: The key id for the default sort is "="
   */
   public function prepOrderBy($sequence) {
 
-    $sequenceOut = array();
 
+    // extract all template items
+    $tplToken = array();
     foreach ($sequence as $token) {
 
-      $orderTpl = $token['base_expr'];
+      if ($token['expr_type'] == "colref" &&
+          substr($this->unEnc($token['base_expr']), 0, 1) == "?") {
 
-      // check for order template marker
-      if (!(substr($orderTpl, 0, 1) == static::$sqlEncBegin &&
-        substr($orderTpl, -1) == static::$sqlEncEnd)) {
-        $sequenceOut[] = $token;
-        continue;
-      }
-      $orderTpl = trim(substr($orderTpl, 1, -1));
-
-      if (!(substr($orderTpl, 0, 1) == "{" &&
-        substr($orderTpl, -1) == "}")) {
-        $sequenceOut[] = $token;
-        continue;
-      }
-      $orderTpl = trim(substr($orderTpl, 1, -1));
-
-      // extract extra sort field info from template
-      $parts = explode(";", $orderTpl);
-
-      $tplSorter = array();
-      foreach ((array)$parts as $value) {
-        $value = trim($value);
-        if (!$value) {
-          continue;
-        }
-        if (strpos($value, "=") !== false) {
-          list($key, $value) = explode("=", $value, 2);
+        $expr = substr($this->unEnc($token['base_expr']), 1);
+        if (strpos($expr, "=") !== false) {
+          list($key, $expr) = explode("=", $expr, 2);
           $key = trim($key);
-          $value = trim($value);
-        }
-        else {  // for stand alone colnames sort expression is same as colname
-          $key = $value;
-        }
-        $tplSorter[$key] = $value;
-      }
-
-      // if no sort expression is present then fill with default sort
-      // if no default sort exists remove sort key
-      $defaultSort = $tplSorter[''];
-      foreach($tplSorter as $key => $value) {
-        if (!$value) {
-          if ($defaultSort) {
-            $tplSorter[$key] = $defaultSort;
-          }
-          else {
-            unset($tplSorter[$key]);
+          $expr = trim($expr);
+          // if no key is given then we use the default sort key
+          if (!$key) {
+            $key = "=";
           }
         }
+        else {
+          // if only colname is given then sort expression is equal to colname
+          $key = $expr;
+        }
+        $tplToken[$key] = $expr;
+
+      }  // eo template token
+    }  // eo read template
+
+    // if there are no template tokens return the sequence unchanged
+    if (!$tplToken) {
+      return $sequence;
+    }
+
+    // postprocess template token
+    // if sort key has no sort expression then use default sort
+    // if no default sort exists remove key
+    $defaultSort = $tplSorter['='];
+    foreach($tplToken as $key => $expr) {
+      if (!$expr) {
+        if ($defaultSort) {
+          $tplToken[$key] = $defaultSort;
+        }
+        else {
+          unset($tplToken[$key]);
+        }
       }
+    } // eo post prep tokens
+Oger::debugFile("tplToken=\n" . var_export($tplToken, true));
 
-      // loop over sort info from ext
-      $extSort = $this->getStoreSort();
-      foreach ($extSort as $colName => $direct) {
 
-        $direct = trim(strtoupper($direct));
+    // get store sorter and do sanity check
+    $extSort = $this->getStoreSort();
+    foreach ($extSort as $colName => &$direct) {
+      $direct = trim(strtoupper($direct));
+      if (!$direct) {
+        $direct = "ASC";
+      }
+      if (!($direct == "ASC" || $direct == "DESC")) {
+        throw new Exception("Invalid direction '{$direct}' for column name '{$colName}' in ExtJS sort.");
+      }
+    }  // eo sanity check
 
-        if ($direct &&  $direct != "ASC" && $direct != "DESC") {
-          throw new Exception("Invalid direction '$direct' for column name '$colName' in ExtJS sort.");
+Oger::debugFile("extSort=\n" . var_export($extSort, true));
+
+    // replace / remove template token with sql expression
+    $sequenceOut = array();
+    foreach ($sequence as $token) {
+
+      if ($token['expr_type'] == "colref" &&
+          substr($this->unEnc($token['base_expr']), 0, 1) == "?") {
+
+        $key = trim(substr($this->unEnc($token['base_expr']), 1));
+        if (strpos($expr, "=") !== false) {
+          list($key, $expr) = explode("=", $key, 2);
+          $key = trim($key);
+          // if no key is given then we use the default sort key
+          if (!$key) {
+            $key = "=";
+          }
         }
 
-        // apply sort expression from template when exists,
-        // otherwise ignore sort request
-        $sortExpr = trim($tplSorter[$colName]);
-        if (!$sortExpr) {
+        // if there is no extjs sort info for this token then we skip
+        if (!$extSort[$key]) {
+Oger::debugFile("dont find key {$key}.\n");
           continue;
         }
 
-        // compose sql
-        // if sort direction placeholder exists replace ALL placeholder
-        // otherwise append direction if given
-        $tmpSql = $sortExpr;
-        if (strpos($tmpSql, "__EXTJS_DIRECTION__") !== false) {
-          $tmpSql = str_replace("__EXTJS_DIRECTION__", $direct, $tmpSql);
-        }
-        elseif ($direct) {
-          $tmpSql .= " {$direct}";
-        }
+        // replace template with prepared value
+        $token['base_expr'] = $tplToken[$key];
+        //$token['no_quotes']['parts'] = array($tplToken[$key]);
+        $token['direction'] = $extSort[$key];
+      }  // template expr
 
-      /* expected result
-        array (
-          'expr_type' => 'colref',
-          'base_expr' => 'field3',
-          'no_quotes' =>
-          array (
-            'delim' => false,
-            'parts' =>
-            array (
-              0 => 'field3',
-            ),
-          ),
-          'sub_tree' => false,
-          'direction' => 'DESC',
-        ),
-      */
+      // add token to out sequence
+      $sequenceOut[] = $token;
 
-      }  // eo ext sort item loop
+    }  // eo prep loop
 
-    }  // eo token loop
 
+Oger::debugFile("orderbyOut=\n" . var_export($sequenceOut, true));
     return $sequenceOut;
   }  // eo ORDER BY with ext
 
@@ -662,7 +653,10 @@ if (static::$devDebug) {
   * Prepare GROUP BY clause with data from extjs request.
   * @params $tpl: The template containing special sql
   */
-  public static function prepGroupBy($tpl, $req = null) {
+  public function prepGroupBy($tpl, $req = null) {
+
+    throw new Exception("Function 'prepGroupBy' not implemented.");
+
 
     if ($whereVals === null) {
       $whereVals = array();
@@ -714,7 +708,7 @@ if (static::$devDebug) {
     }
 
     // convert sort info from json to array
-    $req['sort'] = static::getStoreSort(null, $req);
+    $req['sort'] = $this->getStoreSort(null, $req);
 
     // loop over sort info from ext
     foreach ((array)$req['sort'] as $colName => $direct) {
@@ -762,13 +756,59 @@ if (static::$devDebug) {
   }  // eo GROUP BY with ext
 
 
-  // END OF PREPARE SQL STATEMENT WITH VALUES FROM EXTJS REQUEST - php-sql-parser mode
-  // #######################################################
+  /**
+  * Prepare limit
+  * @params $token: The LIMIT token.
+  * TODO: handle subqueries and function calls in limit params
+  */
+  public function prepLimit($token) {
+
+    $extLimit = $this->getStoreLimit();
+
+    // if there is no store limit, then remove the limit token at all
+    if (!$extLimit['limit']) {
+      return array();
+    }
+
+    if ($this->unEnc($token['offset']) == "?start") {
+      $token['offset'] = $extLimit['start'];
+    }
+
+    if ($this->unEnc($token['rowcount']) == "?limit") {
+      $token['rowcount'] = $extLimit['limit'];
+    }
+
+    return $token;
+  }  // eo prep limit
 
 
 
+  /*
+   * Check if field is enclosed
+   */
+  public function isEnc($field) {
+
+    if (substr($field, 0, 1) == static::$sqlEncBegin &&
+        substr($field, -1) == static::$sqlEncEnd) {
+
+      return true;
+    }
+
+    return false;
+  }  // eo is enc
 
 
+  /*
+   * Remove enclosing chars
+   */
+  public function unEnc($field) {
+
+    if ($this->isEnc($field)) {
+      $field = substr($field, 1, -1);
+    }
+
+    return $field;
+  }  // eo is enc
 
 
 
