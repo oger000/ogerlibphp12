@@ -345,9 +345,9 @@ if (static::$devDebug2) {
       $tmpAndOrSeq = array();
       foreach ($andOrSeq as $token) {
 
-        // we are only interested in named sql params ":?xxx" or "`:?xxx`"
+        // we are only interested in named sql params "`?:xxx`"
         if (!($token['expr_type'] == "colref" &&
-              substr($this->unEnc($token['base_expr']), 0, 2) == ":?")
+              $this->isTplExpr($token['base_expr']))
            ) {
           $tmpAndOrSeq[] = $token;
           continue;
@@ -356,16 +356,7 @@ if (static::$devDebug2) {
         // begin prep named sql params
         $usePart = false;
         $pnamOri = $token['base_expr'];
-        $pnamOriUnenc = $pnamOri;
-        $isEnc = false;
-
-        if ($this->isEnc($pnamOri)) {
-          $pnamOriUnenc = $this->unEnc($pnamOri);
-          $isEnc = true;
-        }
-
-        // remove leading ":?"
-        $pnam = substr($pnamOriUnenc, 2);
+        $pnam = $this->unTplExpr($pnamOri);
 
         // detect internal commands in first char
         $doRemoveColon = false;
@@ -374,7 +365,7 @@ if (static::$devDebug2) {
         $doForceAddParam = false;  // obsoleted
         $isZombieParam = false;  // obsoleted (followup to doForceAddParam)
         $onlyIfHasValue = false;
-        //$trimmedValueRequired = false;
+        //$onlyIfHasTrimmedValue = false;
 
         // loop over internal command chars
         $cmdCharLoop = true;
@@ -401,7 +392,7 @@ if (static::$devDebug2) {
           }
           */
           // add pnam even if not exits in value arra
-          // obsolete, because of the ":?" syntax
+          // obsolete, now passible with plain ":paramname"
           /*
           if (substr($pnam, 0, 1) == "?") {
             $doForceAddParam = true;
@@ -551,9 +542,9 @@ if (static::$devDebug2) {
     foreach ($sequence as $token) {
 
       if ($token['expr_type'] == "colref" &&
-          substr($this->unEnc($token['base_expr']), 0, 1) == "?") {
+          $this->isTplExpr($token['base_expr'])) {
 
-        $expr = substr($this->unEnc($token['base_expr']), 1);
+        $expr = $this->unTplExpr($token['base_expr']);
         if (strpos($expr, "=") !== false) {
           list($key, $expr) = explode("=", $expr, 2);
           $key = trim($key);
@@ -613,9 +604,9 @@ Oger::debugFile("extSort=\n" . var_export($extSort, true));
     foreach ($sequence as $token) {
 
       if ($token['expr_type'] == "colref" &&
-          substr($this->unEnc($token['base_expr']), 0, 1) == "?") {
+          $this->isTplExpr($token['base_expr'])) {
 
-        $key = trim(substr($this->unEnc($token['base_expr']), 1));
+        $key = $this->unTplExpr($token['base_expr']);
         if (strpos($expr, "=") !== false) {
           list($key, $expr) = explode("=", $key, 2);
           $key = trim($key);
@@ -787,14 +778,8 @@ Oger::debugFile("orderbyOut=\n" . var_export($sequenceOut, true));
    * Check if field is enclosed
    */
   public function isEnc($field) {
-
-    if (substr($field, 0, 1) == static::$sqlEncBegin &&
-        substr($field, -1) == static::$sqlEncEnd) {
-
-      return true;
-    }
-
-    return false;
+    return (substr($field, 0, 1) == static::$sqlEncBegin &&
+            substr($field, -1) == static::$sqlEncEnd);
   }  // eo is enc
 
 
@@ -802,13 +787,26 @@ Oger::debugFile("orderbyOut=\n" . var_export($sequenceOut, true));
    * Remove enclosing chars
    */
   public function unEnc($field) {
+    return ($this->isEnc($field) ? substr($field, 1, -1) : $field);
+  }  // eo remove enc
 
-    if ($this->isEnc($field)) {
-      $field = substr($field, 1, -1);
-    }
 
-    return $field;
-  }  // eo is enc
+  /*
+   * Check if value is template expression
+   */
+  public function isTplExpr($expr) {
+    return (substr(trim(unEnc($expr)), 0, 1) == "?");
+  }  // eo is tpl expr
+
+
+  /*
+   * Remove template marker
+   * TODO: maybe a splitTplExpr that returns an array with
+   * expanded values (eg. where cmd keys)
+   */
+  public function unTplExpr($expr) {
+    return ($this->isTplExpr($expr) ? trim(substr(trim(unEnc($expr)), 1)) : $expr);
+  }  // eo remove tpl marker
 
 
 
