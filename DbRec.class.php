@@ -33,7 +33,8 @@ class DbRec {
 
 
   /**
-  * Filter out column values from an array.
+  * Filter out values from an array where the keys of the values array
+  * have to match a column name of the assiciated table.
   * @values: associative array with fieldname (key) value pairs.
   */
   public static function filterColValues($values = array()) {
@@ -94,7 +95,6 @@ class DbRec {
 
     return $sql;
   }  // eo get sql
-
 
 
 

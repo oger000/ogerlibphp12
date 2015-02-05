@@ -30,7 +30,6 @@ class OgerExtjSqlTpl {
    * Constructor.
    */
   public function __construct($req = null) {
-
     $this->setRequest($req);
   }  // eo constructor
 
@@ -40,11 +39,7 @@ class OgerExtjSqlTpl {
    * defaults to supervariable $_REQUEST
    */
   public function setRequest($req = null) {
-
-    if ($req === null) {
-      $req = $_REQUEST;
-    }
-    $this->request = $req;
+    $this->request = ($req ?: $_REQUEST);
   }  // eo constructor
 
 
@@ -128,8 +123,50 @@ class OgerExtjSqlTpl {
   /**
   * Get values for named sql params
   */
-  public function getParamValues() {
-    return $this->paramValues;
+  public function getParamValues($stmt = null, $values = null) {
+    $stmt = ($stmt ?: $this->sql);
+    $values = ($values ?: $this->paramValues);
+
+    $paramNames = OgerDb::getStmtParamNames($stmt);
+
+    // remove unwanted param (this should not happen on internal
+    // processing - but better stay on the safe side)
+    foreach ($values as $paramName => $value) {
+      if (!in_array($paramName, $paramNames)) {
+        unset($values[$paramName]);
+      }
+    }  // eo remove loop
+
+    // add missing parameter values
+    foreach ($paramNames as $paramName) {
+
+      if (!array_key_exists($paramName, $values)) {
+
+        // try extjs filter
+        $tmpVals = static::getStoreFilter();
+        if (array_key_exists($paramName, $tmpVals)) {
+          $values[$paramName] = $tmpVals[$paramName];
+          continue;
+        }
+
+        // try given request from prep call or constructor
+        $tmpVals = $this->request;
+        if (array_key_exists($paramName, $tmpVals)) {
+          $values[$paramName] = $tmpVals[$paramName];
+          continue;
+        }
+
+        // last resort is the html request at all
+        $tmpVals = $_REQUEST;
+        if (array_key_exists($paramName, $tmpVals)) {
+          $values[$paramName] = $tmpVals[$paramName];
+          continue;
+        }
+
+      }
+    }  // eo add loop
+
+    return $stmt;
   }  // eo get param values
 
 
@@ -143,11 +180,11 @@ class OgerExtjSqlTpl {
   * Prepare select statement with data from extjs request.
   * WORK IN PROGRESS
   * @params $tpl: The template containing special sql
-  *         Variables are detectec by the colon (:) prefix.
+  *         Variables are detectec by the question mark ("?") prefix.
   */
   public function prepare($tpl, $req = null) {
-static::$devDebug = true;
-static::$devDebug2 = true;
+//static::$devDebug = true;
+//static::$devDebug2 = true;
 if (static::$devDebug) {
   Oger::debugFile("template = {$tpl}");
 }
@@ -174,7 +211,7 @@ if (static::$devDebug) {
     $this->prepared = $this->prepQuery($this->parsed);
 if (static::$devDebug) {
   Oger::debugFile("prepared=\n" . var_export($this->prepared, true));
-//  exit;
+  //exit;
 }
 
     // create sql from prepared parser tree
@@ -182,7 +219,7 @@ if (static::$devDebug) {
     $this->sql = $creator->create($this->prepared);
 if (static::$devDebug2) {
   Oger::debugFile(var_export($this->sql, true));
-  exit;
+  //exit;
 }
 
     return $this->sql;
@@ -311,8 +348,7 @@ if (static::$devDebug2) {
 
   /**
   * Prepare WHERE (or HAVING) tree with data from extjs request.
-  * @params $sequcence:
-  *         Variables are detectec by the colon (:) prefix.
+  * @params $sequcence
   */
   public function prepWhere($sequence) {
 
@@ -356,14 +392,12 @@ if (static::$devDebug2) {
         // begin prep named sql params
         $usePart = false;
         $pnamOri = $token['base_expr'];
-        $pnam = $this->unTplExpr($pnamOri);
+        $pnam = $this->untagTplExpr($pnamOri);
 
         // detect internal commands in first char
-        $doRemoveColon = false;
+        $addColonPrefix = false;
         $doRemovePnam = false;
-        $isRequiredParam = false;  // obsoleted for now
-        $doForceAddParam = false;  // obsoleted
-        $isZombieParam = false;  // obsoleted (followup to doForceAddParam)
+        $isRequiredParam = false;
         $onlyIfHasValue = false;
         //$onlyIfHasTrimmedValue = false;
 
@@ -371,38 +405,27 @@ if (static::$devDebug2) {
         $cmdCharLoop = true;
         while ($cmdCharLoop) {
 
-          // remove colon in final where clause
-          if (substr($pnam, 0, 1) == "=") {  // was: "-"
-            $doRemoveColon = true;
+          // add colon in final where clause
+          if (substr($pnam, 0, 1) == ":") {
+            $addColonPrefix = true;
             $pnam = substr($pnam, 1);
             continue;
           }
-          // test if pnam exists and remove pnam afterwards
-          if (substr($pnam, 0, 1) == "-") {  // was: "?"
+          // test if pnam exists and use part, butremove pnam afterwards
+          if (substr($pnam, 0, 1) == "-") {
             $doRemovePnam = true;
             $pnam = substr($pnam, 1);
             continue;
           }
-          // throw exption if pnam does not exist -> delegated to execute?
-          /*
-          if (substr($pnam, 0, 1) == "^") {  // was: "!"
+          // throw exption if pnam does not exist
+          if (substr($pnam, 0, 1) == "^") {
             $isRequiredParam = true;
             $pnam = substr($pnam, 1);
             continue;
           }
-          */
-          // add pnam even if not exits in value arra
-          // obsolete, now passible with plain ":paramname"
-          /*
-          if (substr($pnam, 0, 1) == "?") {
-            $doForceAddParam = true;
-            $pnam = substr($pnam, 1);
-            continue;
-          }
-          */
           // use only if not empty (untrimmed) (but may be trimmed when doing global request preparing)
           // TODO extra cmd-char for: not-empty (trimmed) ???
-          if (substr($pnam, 0, 1) == "+") {  // alternate: "~" or "#"
+          if (substr($pnam, 0, 1) == "+") {
             $onlyIfHasValue = true;
             $pnam = substr($pnam, 1);
             continue;
@@ -412,12 +435,12 @@ if (static::$devDebug2) {
         }  // eo internal cmd check
 
 
+        // ---
         // check if key exists and get value
-        //
-        // if pnam already in where vals, then we do nothing
+
+        // if pnam already in param vals, then we use this
         if (array_key_exists($pnam, $this->paramValues)) {
           $value = $this->paramValues[$pnam];
-          // already done
           $usePart = true;
         }
         // otherwise if pnam exists in extjs filter vals then we take this
@@ -430,50 +453,38 @@ if (static::$devDebug2) {
           $value = $this->request[$pnam];
           $usePart = true;
         }
+
+        // ---
         // handle special internal commands and special cases
-        //
-        // if param is forced then add part even if pnam not present
-        // the user is responsible to provide the key and the value elsewhere
-        if ($doForceAddParam) {
-          $isZombieParam = true;
-          $usePart = true;
-        }
 
-        // otherwise check if it is a required param
-        // if not present till now throw an exeption
+        // check if it is a required param
+        // if pnam not present till now then throw an exeption
         if ($isRequiredParam && !$usePart) {
-          throw new Exception("Required parameter '$pnam' not in value array for {$this->template}.");
+          throw new Exception("Required parameter name '$pnam' not in value array (request) for {$this->template}.");
         }
 
-        // otherwise if value is required but not present
+        // if value-content is required but not present
         // then exlude if value is not present
         if ($onlyIfHasValue && !$value) {
           $usePart = false;
           break;
         }
 
-
         // final test if part is used
         if (!$usePart) {
           break;
         }
 
-
         if ($doRemovePnam) {
-          continue;  // next token
+          continue;  // next token - use part, but not pnam
         }
 
         // polish pnam
-        if ($doRemoveColon) {
-          $pnamOut = $pnam;
+        if ($addColonPrefix) {
+          $pnamOut = ":{$pnam}";
         }
         else {
-          // reasign colon and remember value
-          $pnamOut = ":{$pnam}";
-          // do not add zombie parameters - they come from elsewhere
-          if (!$isZombieParam) {
-            $tmpParamValues[$pnam] = $value;
-          }
+          $pnamOut = $pnam;
         }
 
         $token['base_expr'] = $pnamOut;
@@ -532,57 +543,44 @@ if (static::$devDebug2) {
   /**
   * Prepare ORDER BY clause with data from extjs request.
   * @params $tpl: The template containing special sql
-  * Info: The key id for the default sort is "="
+  * Info: The key id for the default sort is the empty string ("")
   */
   public function prepOrderBy($sequence) {
 
 
     // extract all template items
-    $tplToken = array();
+    $orderByToken = array();
     foreach ($sequence as $token) {
 
       if ($token['expr_type'] == "colref" &&
           $this->isTplExpr($token['base_expr'])) {
 
-        $expr = $this->unTplExpr($token['base_expr']);
-        if (strpos($expr, "=") !== false) {
-          list($key, $expr) = explode("=", $expr, 2);
-          $key = trim($key);
-          $expr = trim($expr);
-          // if no key is given then we use the default sort key
-          if (!$key) {
-            $key = "=";
-          }
-        }
-        else {
-          // if only colname is given then sort expression is equal to colname
-          $key = $expr;
-        }
-        $tplToken[$key] = $expr;
+        $aExpr = $this->unpackOrderByExpr($token['base_expr']);
+        $orderByToken[$aExpr['key']] = $aExpr['cols'];
 
       }  // eo template token
     }  // eo read template
 
     // if there are no template tokens return the sequence unchanged
-    if (!$tplToken) {
+    if (!$orderByToken) {
       return $sequence;
     }
 
-    // postprocess template token
+    // postprocess template token (handle default sort)
     // if sort key has no sort expression then use default sort
-    // if no default sort exists remove key
-    $defaultSort = $tplSorter['='];
-    foreach($tplToken as $key => $expr) {
-      if (!$expr) {
-        if ($defaultSort) {
-          $tplToken[$key] = $defaultSort;
+    // if no default sort exists then remove key completly
+    $defaultCols = $orderByToken[''];
+    unset($orderByToken['']);
+    foreach($orderByToken as $key => $cols) {
+      if (!$cols) {
+        if ($defaultCols) {
+          $orderByToken[$key] = $defaultCols;
         }
         else {
-          unset($tplToken[$key]);
+          unset($orderByToken[$key]);
         }
       }
     } // eo post prep tokens
-Oger::debugFile("tplToken=\n" . var_export($tplToken, true));
 
 
     // get store sorter and do sanity check
@@ -597,7 +595,6 @@ Oger::debugFile("tplToken=\n" . var_export($tplToken, true));
       }
     }  // eo sanity check
 
-Oger::debugFile("extSort=\n" . var_export($extSort, true));
 
     // replace / remove template token with sql expression
     $sequenceOut = array();
@@ -606,35 +603,50 @@ Oger::debugFile("extSort=\n" . var_export($extSort, true));
       if ($token['expr_type'] == "colref" &&
           $this->isTplExpr($token['base_expr'])) {
 
-        $key = $this->unTplExpr($token['base_expr']);
-        if (strpos($expr, "=") !== false) {
-          list($key, $expr) = explode("=", $key, 2);
-          $key = trim($key);
-          // if no key is given then we use the default sort key
-          if (!$key) {
-            $key = "=";
-          }
-        }
+        $aExpr = $this->unpackOrderByExpr($token['base_expr']);
+        $key = $aExpr['key'];
 
         // if there is no extjs sort info for this token then we skip
         if (!$extSort[$key]) {
-Oger::debugFile("dont find key {$key}.\n");
           continue;
         }
 
-        // replace template with prepared value
-        $token['base_expr'] = $tplToken[$key];
-        //$token['no_quotes']['parts'] = array($tplToken[$key]);
-        $token['direction'] = $extSort[$key];
-      }  // template expr
+        // replace template with prepared values
+        foreach ($aExpr['cols'] as $colName) {
+          $token['base_expr'] = $colName;
+          //$token['no_quotes']['parts'] = array($colName);
+          $token['direction'] = $extSort[$key];
+          $sequenceOut[] = $token;
+        }  // eo column loop
 
-      // add token to out sequence
-      $sequenceOut[] = $token;
+      }  // template expr
+      else {
+        // add unchanged token to out sequence
+        $sequenceOut[] = $token;
+      }
 
     }  // eo prep loop
 
+    // if there is no order by token but we have a default sort
+    // then we use the default cols to create order by tokens
+    // TODO delegate token creation to a createOrderByToken function?
+    if (!$sequenceOut && $defaultCols) {
+      foreach ($defaultCols as $colName) {
+        $sequenceOut[] = array(
+          'expr_type' => 'colref',
+          'base_expr' => $colName,
+          'no_quotes' => array (
+            'delim' => false,
+            'parts' => array (
+              0 => $colName,
+            ),
+          ),
+          'sub_tree' => false,
+          'direction' => 'ASC',
+        );
+      }  // eo col loop
+    }  // eo default sort
 
-Oger::debugFile("orderbyOut=\n" . var_export($sequenceOut, true));
     return $sequenceOut;
   }  // eo ORDER BY with ext
 
@@ -648,102 +660,7 @@ Oger::debugFile("orderbyOut=\n" . var_export($sequenceOut, true));
 
     throw new Exception("Function 'prepGroupBy' not implemented.");
 
-
-    if ($whereVals === null) {
-      $whereVals = array();
-    }
-
-    if ($req === null) {
-      $req = $_REQUEST;
-    }
-
-
-    // detect, save and remove leading where keyword
-    if (preg_match("/^\s*GROUP\s+BY\s+/i", $tpl, $matches)) {
-      $kw = $matches[0];
-      $tpl = implode("", explode($kw, $tpl, 2));
-    }
-
-
-    // extract extra group field info from template
-    $parts = explode(";", $tpl);
-    $tplSorter = array();
-    foreach ((array)$parts as $value) {
-      $value = trim($value);
-      if (!$value) {
-        continue;
-      }
-      if (strpos($value, "=") !== false) {
-        list($key, $value) = explode("=", $value, 2);
-        $key = trim($key);
-        $value = trim($value);
-      }
-      else {  // for stand alone colnames group expression is same as colname
-        $key = $value;
-      }
-      $tplSorter[$key] = $value;
-    }
-
-    // if no group expression is present then fill with default group
-    // if no default group exists remove group key
-    $defaultSort = $tplSorter[''];
-    foreach($tplSorter as $key => $value) {
-      if (!$value) {
-        if ($defaultSort) {
-          $tplSorter[$key] = $defaultSort;
-        }
-        else {
-          unset($tplSorter[$key]);
-        }
-      }
-    }
-
-    // convert sort info from json to array
-    $req['sort'] = $this->getStoreSort(null, $req);
-
-    // loop over sort info from ext
-    foreach ((array)$req['sort'] as $colName => $direct) {
-
-      if ($direct &&  $direct != "ASC" && $direct != "DESC" && trim($direct) != "") {
-        throw new Exception("Invalid direction '$direct' for column name '$colName' in ExtJS sort.");
-      }
-
-      // apply sort expression from template when exists,
-      // otherwise ignore sort request
-      $sortExpr = trim($tplSorter[$colName]);
-      if (!$sortExpr) {
-        continue;
-      }
-
-      // compose sql
-      // if sort direction placeholder exists replace ALL placeholder
-      // otherwise append direction if given
-      $tmpSql = $sortExpr;
-      if (strpos($tmpSql, "__EXTJS_DIRECTION__") !== false) {
-        $tmpSql = str_replace("__EXTJS_DIRECTION__", $direct, $tmpSql);
-      }
-      elseif($direct) {
-        $tmpSql .= " $direct";
-      }
-
-    }  // eo ext sort item loop
-
-    $sql = trim($sql);
-
-    // if no order-by sql is composed, then use the template default sort
-    // but remove direction placeholder fist
-    if (!$sql && $defaultSort) {
-      $sql = str_replace("__EXTJS_DIRECTION__", "", $defaultSort);
-    }
-
-
-    // if sql collected then prefix with keyword
-    if ($sql) {
-      $sql = " {$kw} {$sql} ";
-    }
-
-
-    return $sql;
+    return null;
   }  // eo GROUP BY with ext
 
 
@@ -795,18 +712,50 @@ Oger::debugFile("orderbyOut=\n" . var_export($sequenceOut, true));
    * Check if value is template expression
    */
   public function isTplExpr($expr) {
-    return (substr(trim(unEnc($expr)), 0, 1) == "?");
+    return (substr(trim($this->unEnc($expr)), 0, 1) == "?");
   }  // eo is tpl expr
 
 
   /*
    * Remove template marker
-   * TODO: maybe a splitTplExpr that returns an array with
-   * expanded values (eg. where cmd keys)
    */
-  public function unTplExpr($expr) {
-    return ($this->isTplExpr($expr) ? trim(substr(trim(unEnc($expr)), 1)) : $expr);
+  public function untagTplExpr($expr) {
+    return ($this->isTplExpr($expr) ? trim(substr(trim($this->unEnc($expr)), 1)) : $expr);
   }  // eo remove tpl marker
+
+
+  /*
+   * Unpack / eval template where expressions
+   */
+  public function unpackWhereExpr($expr) {
+    // TODO - handled directly in prepWhere for now
+  }  // eo unpack where expr
+
+
+  /*
+   * Unpack / eval template orderby expressions
+   * The key id for the default sort is the empty string ("")
+   * Allow multiple columns per key - separated by commas (",")
+   */
+  public function unpackOrderByExpr($expr) {
+
+    $expr = $this->untagTplExpr($expr);
+
+    if (strpos($expr, "=") !== false) {
+      list($key, $expr) = explode("=", $expr, 2);
+      $key = trim($key);
+      $expr = trim($expr);
+    }
+    else {
+      // if only colname is given then sort expression equals to colname
+      $key = $expr;
+    }
+
+    $cols = explode(",", $expr);
+
+    return array("key" => $key, "cols" => $cols);
+  }  // eo unpack order expr
+
 
 
 
