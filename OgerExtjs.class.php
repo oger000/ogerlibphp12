@@ -5,6 +5,22 @@
 */
 
 
+/*
+ * ATTENTION:
+ * The EXTJSQL PART is highly EXPERIMANTAL and INCOMPLETE.
+ * There is only implemented what is used currently.
+ * This EXTJSQL PART is OBSOLETED from 02/2015 and only maintaned for
+ * backward compability with legacy code.
+ * New features will not be added THERE. Use OgerExtjSqlTpl instead.
+ * ---
+ * Everything outside the
+ * // PREPARE SQL STATEMENT WITH VALUES FROM EXTJS REQUEST - PREG / STRREPL MODE
+ * enclosed part will be maintained normal.
+ */
+
+
+
+
 /**
 * Some methods to simplify Extjs responses.
 */

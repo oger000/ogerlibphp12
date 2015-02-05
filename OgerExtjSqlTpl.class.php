@@ -5,6 +5,17 @@
 */
 
 
+/*
+ * ATTENTION:
+ * This class is highly EXPERIMANTAL and INCOMPLETE.
+ * There is only implemented what is used currently and
+ * new features are added when needed.
+ * So use with care.
+ */
+
+
+
+
 /**
 * Prepare sql templates with exjs response data
 */
@@ -166,7 +177,7 @@ class OgerExtjSqlTpl {
       }
     }  // eo add loop
 
-    return $stmt;
+    return $values;
   }  // eo get param values
 
 
@@ -546,7 +557,6 @@ if (static::$devDebug2) {
   * Info: The key id for the default sort is the empty string ("")
   */
   public function prepOrderBy($sequence) {
-
 
     // extract all template items
     $orderByToken = array();
