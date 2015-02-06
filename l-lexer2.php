@@ -5,19 +5,19 @@
 $oriCwd = getcwd();
 $dirPrefix = "";
 while (true) {
-  // stop on index file directory
-  if (file_exists("index.php")) {
-    break;
-  }
-  $oldCwd = getcwd();
-  chdir("..");
-  $dirPrefix .= "../";
-  // Avoid endless loops when reaching the root directory
-  // It is very likely wrong if we reach the root dir
-  // but we do not exit. The logfile will do the rest.
-  if (getcwd() == $oldCwd) {
-    break;
-  }
+	// stop on index file directory
+	if (file_exists("index.php")) {
+		break;
+	}
+	$oldCwd = getcwd();
+	chdir("..");
+	$dirPrefix .= "../";
+	// Avoid endless loops when reaching the root directory
+	// It is very likely wrong if we reach the root dir
+	// but we do not exit. The logfile will do the rest.
+	if (getcwd() == $oldCwd) {
+		break;
+	}
 }
 chdir($oriCwd);
 
@@ -39,7 +39,7 @@ file_put_contents("{$filNam}.lex2a.localonly", $out);
 $tok = $p->parse($in, true);
 $out = "";
 foreach ($tok as $t) {
-  $out .= " {$t[0]} => {$t[1]}\n";
+	$out .= " {$t[0]} => {$t[1]}\n";
 }
 file_put_contents("{$filNam}.lex2b.localonly", $out);
 

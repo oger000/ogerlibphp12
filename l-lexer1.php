@@ -12,15 +12,15 @@ $tx = var_export($t, true);
 $tx = "";
 foreach ($t as $xTok) {
 
-  if (is_string($xTok)) {
-    $idNam = "*PLAIN*";
-    $tokTx = $xTok;
-  }
-  else {
-    list($id, $tokTx) = $xTok;
-    $idNam = token_name($id);
-  }
-  $tx .= " {$idNam} => {$tokTx}\n";
+	if (is_string($xTok)) {
+		$idNam = "*PLAIN*";
+		$tokTx = $xTok;
+	}
+	else {
+		list($id, $tokTx) = $xTok;
+		$idNam = token_name($id);
+	}
+	$tx .= " {$idNam} => {$tokTx}\n";
 }
 
 
