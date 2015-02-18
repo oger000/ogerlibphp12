@@ -234,7 +234,7 @@ if (static::$devDebug) {
 		// create sql from prepared parser tree
 		$creator = new PHPSQLParser\PHPSQLCreator();
 		$this->sql = $creator->create($this->prepared);
-if (static::$devDebug2) {
+if (static::$devDebug) {
 	Oger::debugFile(var_export($this->sql, true));
 	//exit;
 }
