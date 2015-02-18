@@ -672,11 +672,10 @@ if (static::$devDebug2) {
 	* Prepare GROUP BY clause with data from extjs request.
 	* @params $tpl: The template containing special sql
 	*/
-	public function prepGroupBy($tpl, $req = null) {
+	public function prepGroupBy($sequence) {
 
-		throw new Exception("Function 'prepGroupBy' not implemented.");
-
-		return null;
+		// extjs 5.1 has no remote group config any more
+		return $sequence;
 	}  // eo GROUP BY with ext
 
 
