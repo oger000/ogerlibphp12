@@ -36,7 +36,7 @@
  * @author    André Rothe <andre.rothe@phosco.info>
  * @copyright 2010-2014 Justin Swanhart and André Rothe
  * @license   http://www.debian.org/misc/bsd.license  BSD License (3 Clause)
- * @version   SVN: $Id: LexerSplitter.php 1309 2014-04-15 07:51:16Z phosco@gmx.de $
+ * @version   SVN: $Id$
  * 
  */
 

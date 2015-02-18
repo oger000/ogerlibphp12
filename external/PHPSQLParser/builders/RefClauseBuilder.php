@@ -35,7 +35,7 @@
  * @author    André Rothe <andre.rothe@phosco.info>
  * @copyright 2010-2014 Justin Swanhart and André Rothe
  * @license   http://www.debian.org/misc/bsd.license  BSD License (3 Clause)
- * @version   SVN: $Id: RefClauseBuilder.php 1380 2014-09-11 09:29:32Z phosco@gmx.de $
+ * @version   SVN: $Id$
  * 
  */
 

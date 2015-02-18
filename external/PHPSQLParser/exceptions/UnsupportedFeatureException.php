@@ -36,7 +36,7 @@
  * @author    André Rothe <andre.rothe@phosco.info>
  * @copyright 2010-2014 André Rothe
  * @license   http://www.debian.org/misc/bsd.license  BSD License (3 Clause)
- * @version   SVN: $Id: UnsupportedFeatureException.php 1331 2014-04-15 11:51:17Z phosco@gmx.de $
+ * @version   SVN: $Id$
  * 
  */
 namespace PHPSQLParser\exceptions;

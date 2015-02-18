@@ -35,7 +35,7 @@
  * @author    André Rothe <andre.rothe@phosco.info>
  * @copyright 2010-2014 Justin Swanhart and André Rothe
  * @license   http://www.debian.org/misc/bsd.license  BSD License (3 Clause)
- * @version   SVN: $Id: HavingBuilder.php 1382 2014-09-11 10:47:28Z phosco@gmx.de $
+ * @version   SVN: $Id$
  * 
  */
 

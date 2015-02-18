@@ -35,7 +35,7 @@
  * @author    André Rothe <andre.rothe@phosco.info>
  * @copyright 2010-2014 Justin Swanhart and André Rothe
  * @license   http://www.debian.org/misc/bsd.license  BSD License (3 Clause)
- * @version   SVN: $Id: SelectBracketExpressionBuilder.php 1367 2014-07-22 08:36:44Z phosco@gmx.de $
+ * @version   SVN: $Id$
  * 
  */
 
