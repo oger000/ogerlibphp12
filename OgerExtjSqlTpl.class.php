@@ -194,7 +194,7 @@ class OgerExtjSqlTpl {
 	*         Variables are detectec by the question mark ("?") prefix.
 	*/
 	public function prepare($tpl, $req = null, $tplOpts = null) {
-static::$devDebug = true;
+//static::$devDebug = true;
 //static::$devDebug2 = true;
 if (static::$devDebug) {
 	Oger::debugFile("template = {$tpl}");
