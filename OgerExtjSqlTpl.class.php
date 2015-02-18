@@ -193,8 +193,8 @@ class OgerExtjSqlTpl {
 	* @params $tpl: The template containing special sql
 	*         Variables are detectec by the question mark ("?") prefix.
 	*/
-	public function prepare($tpl, $req = null) {
-//static::$devDebug = true;
+	public function prepare($tpl, $req = null, $tplOpts = null) {
+static::$devDebug = true;
 //static::$devDebug2 = true;
 if (static::$devDebug) {
 	Oger::debugFile("template = {$tpl}");
@@ -217,13 +217,19 @@ if (static::$devDebug) {
 		$this->parsed = $parser->parse($tpl);
 if (static::$devDebug) {
 	Oger::debugFile("parsed=\n" . var_export($this->parsed, true));
+	//exit;
 }
 
-		$this->prepared = $this->prepQuery($this->parsed);
+		if (!$tplOpts['skip-php-sql-oger-prepare']) {
+			$this->prepared = $this->prepQuery($this->parsed);
 if (static::$devDebug) {
 	Oger::debugFile("prepared=\n" . var_export($this->prepared, true));
 	//exit;
 }
+		}
+		else {
+			$this->prepared = $this->parsed;
+		}  // eo prepare
 
 		// create sql from prepared parser tree
 		$creator = new PHPSQLParser\PHPSQLCreator();

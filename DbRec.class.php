@@ -73,7 +73,7 @@ class DbRec {
 		case "php-sql":
 			$tpl = OgerExtjs::extjSqlClearCurlyTags($tpl);
 			$sqlTpl = new OgerExtjSqlTpl($req);
-			$sql = $sqlTpl->prepare($tpl);
+			$sql = $sqlTpl->prepare($tpl, null, $tplOpts);
 			$seleVals = $sqlTpl->getParamValues();
 			break;
 		default:
