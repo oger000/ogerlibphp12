@@ -766,7 +766,11 @@ if (static::$devDebug) {
 			$key = $expr;
 		}
 
-		$cols = explode(",", $expr);
+		// if a key, but no expression is given, then the
+		// cols remain empty and is replaced with the default sort later
+		if ($expr) {
+			$cols = explode(",", $expr);
+		}
 
 		return array("key" => $key, "cols" => $cols);
 	}  // eo unpack order expr
