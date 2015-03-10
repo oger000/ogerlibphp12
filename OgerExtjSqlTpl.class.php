@@ -295,7 +295,7 @@ if (static::$devDebug) {
 
 
 	/**
-	* Prepare token sequence.
+	* Prepare token sequence. Non-WHERE sequences to be explicit.
 	* @params $sequences: A token sequence.
 	*/
 	public function prepSequence($sequence) {
@@ -305,7 +305,7 @@ if (static::$devDebug) {
 		foreach ((array)$sequence as $key => $token) {
 			if ($token['sub_tree']) {
 				$token = $this->prepSubtree($token);
-				// if token subtree is empty, then we ignore
+				// if token subtree is empty after preparation, then we ignore
 				if (!$token['sub_tree']) {
 					continue;
 				}
@@ -323,25 +323,32 @@ if (static::$devDebug) {
 	*/
 	public function prepSubtree($token, $whereMode = false) {
 
-		switch ($token['expr_type']) {
-		case "aggregate_function":
-			// TODO
-			break;
-		case "bracket_expression":
+
+		// resolve special cases
+
+		// handle subqueries
+		if ($token['expr_type'] ==  "subquery") {
+			$token['sub_tree'] = $this->prepQuery($token['sub_tree']);
+			return $token;
+		}
+
+		// handle bracket expression (maybe incomplete)
+		if ($token['expr_type'] == "bracket_expression") {
 			if ($whereMode) {
 				$token['sub_tree'] = $this->prepWhere($token['sub_tree']);
 			}
 			else {
-				//throw new Exception("Found bracket_expression in prepSubtree mode without whereMode.");
-				// do nothing
+				// Maybe bracket expressions only exists in where clauses, but we dont know -
+				// so throw an exeption to detect it.
+				throw new Exception("Found bracket_expression in prepSubtree mode without whereMode.");
 			}
-			break;
-		case "subquery":
-			$token['sub_tree'] = $this->prepQuery($token['sub_tree']);
-			break;
-		default:
-			throw new Exception("Unknown prepSubtree mode: {$token['expr_type']}.");
+			return $token;
 		}
+
+
+		// otherwise the subtree is expected to be another sql sequence
+		$token['sub_tree'] = $this->prepSequence($token['sub_tree']);
+
 
 		return $token;
 	}  // eo prep subtree
