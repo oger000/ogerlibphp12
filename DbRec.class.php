@@ -116,7 +116,10 @@ class DbRec {
 
 		$stmt = Dbw::getStoreStmt($storeAction, static::$tableName, $values, $where);
 		$pstmt = Dbw::$conn->prepare($stmt);
-		if (is_array($where)) {
+
+		// on update merge the where-values in, but preserve
+		// data-values if already present
+		if ($storeAction == "UPDATE" && is_array($where)) {
 			$values = array_merge($where, $values);
 		}
 
