@@ -146,6 +146,12 @@ class Oger {
 	}  // eo natural sort
 
 
+	/*
+	 * Number format with german defaults
+	 */
+	public static function numberFormatDe($num, $dec = 0) {
+		return number_format($num, $dec, ",", ".");
+	}  // eo number format de
 
 
 
