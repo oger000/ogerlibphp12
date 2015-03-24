@@ -98,6 +98,35 @@ class DbRec {
 
 
 
+	/**
+	* Prepare sql template and fill sele vals
+	* ATTENTION: only accepts php-sql parser templates
+	*/
+	public static function prepSqlTpl($tpl, &$seleVals = array(), $req = null, &$tplOpts = array()) {
+
+		$sqlTpl = new OgerExtjSqlTpl();
+		$sql = $sqlTpl->prepare($tpl, $req, $tplOpts);
+		$seleVals = $sqlTpl->getParamValues();
+
+		// postprocess template
+		/* should be obsolete
+		if ($tplOpts['str_replace']) {
+			foreach ((array)$tplOpts['str_replace'] as $search => $replace) {
+				if (!$search) {
+					continue;
+				}
+				$sql = str_replace($search, $replace, $sql);
+			}
+		}
+		*/
+
+		// format / beautify sql
+		$sql = SqlFormatter::format($sql);
+
+		return $sql;
+	}  // eo get sql
+
+
 
 	/**
 	* Write record values to db.
