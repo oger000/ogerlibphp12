@@ -181,6 +181,29 @@ class OgerExtjSqlTpl {
 	}  // eo get param values
 
 
+	// #######################################################
+	// PREPARE SQL STATEMENT WITH VALUES FROM EXTJS REQUEST
+
+
+	/**
+	* Prepare sql template and fill sele vals
+	* ATTENTION: only accepts php-sql parser templates
+	*/
+	public static function _prepare($tpl, &$seleVals = array(), $req = null, $tplOpts = array()) {
+
+		$sqlTpl = new static();
+		$sql = $sqlTpl->prepare($tpl, $req, $tplOpts);
+		$seleVals = $sqlTpl->getParamValues();
+
+		// format / beautify sql
+		if (!$tplOpts['skip-format']) {
+			$sql = SqlFormatter::format($sql);
+		}
+
+		return $sql;
+	}  // eo _prep
+
+
 
 	// #######################################################
 	// PREPARE SQL STATEMENT WITH VALUES FROM EXTJS REQUEST
