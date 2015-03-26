@@ -91,7 +91,9 @@ class DbRec {
 		}
 
 		// format / beautify sql
-		$sql = SqlFormatter::format($sql);
+		if (!$tplOpts['skip-format']) {
+			$sql = SqlFormatter::format($sql);
+		}
 
 		return $sql;
 	}  // eo get sql
