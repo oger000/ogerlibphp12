@@ -69,6 +69,26 @@ class OgerDateTime extends DateTime {
 
 
 
+	/**
+	 * Is before christ
+	 * Als (miss)used to check for empty sqldate
+	 * mysql "0000-00-00" result in DateTime "-0001-11-30"
+	 * (see http://php.net/manual/de/datetime.construct.php)
+	*/
+	public function isBC() {
+		return ($this->format("Y") < 0);
+	}  // eo is bc
+
+
+
+	/**
+	 * Date difference in full days (no fractals).
+	*/
+	public function diffDays($dateTime, $absolute = false) {
+		$interval = $this->diff($dateTime, $absolute);
+		return $interval->days;
+	}  // eo day diff
+
 
 
 }  // eo class
