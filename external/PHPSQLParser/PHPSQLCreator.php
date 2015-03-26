@@ -31,12 +31,12 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  * @author    André Rothe <andre.rothe@phosco.info>
  * @copyright 2010-2014 André Rothe
  * @license   http://www.debian.org/misc/bsd.license  BSD License (3 Clause)
  * @version   SVN: $Id$
- * 
+ *
  */
 
 namespace PHPSQLParser;
@@ -50,13 +50,14 @@ use PHPSQLParser\builders\DropStatementBuilder;
 use PHPSQLParser\builders\RenameStatementBuilder;
 use PHPSQLParser\builders\ShowStatementBuilder;
 use PHPSQLParser\builders\BracketStatementBuilder;
+use PHPSQLParser\builders\UnionStatementBuilder;
 
 /**
- * This class generates SQL from the output of the PHPSQLParser. 
+ * This class generates SQL from the output of the PHPSQLParser.
  *
  * @author  André Rothe <andre.rothe@phosco.info>
  * @license http://www.debian.org/misc/bsd.license  BSD License (3 Clause)
- *  
+ *
  */
 class PHPSQLCreator {
 
@@ -72,7 +73,8 @@ class PHPSQLCreator {
 
         case 'UNION':
         case 'UNION ALL':
-            throw new UnsupportedFeatureException($k);
+            $builder = new UnionStatementBuilder();
+            $this->created = $builder->build($parsed);
             break;
         case 'SELECT':
             $builder = new SelectStatementBuilder();
