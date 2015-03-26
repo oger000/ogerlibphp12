@@ -191,9 +191,9 @@ class OgerExtjSqlTpl {
 	*/
 	public static function _prepare($tpl, &$seleVals = array(), $req = null, $tplOpts = array()) {
 
-		$sqlTpl = new static();
-		$sql = $sqlTpl->prepare($tpl, $req, $tplOpts);
-		$seleVals = $sqlTpl->getParamValues();
+		$extjSqlTpl = new static();
+		$sql = $extjSqlTpl->prepare($tpl, $req, $tplOpts);
+		$seleVals = $extjSqlTpl->getParamValues();
 
 		// format / beautify sql
 		if (!$tplOpts['skip-format']) {
@@ -244,7 +244,7 @@ if (static::$devDebug) {
 }
 
 		if (!$tplOpts['skip-php-sql-oger-prepare']) {
-			$this->prepared = $this->prepQuery($this->parsed);
+			$this->prepared = $this->prepParserTree($this->parsed);
 if (static::$devDebug) {
 	Oger::debugFile("prepared=\n" . var_export($this->prepared, true));
 	//exit;
@@ -258,12 +258,48 @@ if (static::$devDebug) {
 		$creator = new PHPSQLParser\PHPSQLCreator();
 		$this->sql = $creator->create($this->prepared);
 if (static::$devDebug) {
-	Oger::debugFile(var_export($this->sql, true));
+	Oger::debugFile("sql={$this->sql}");
 	//exit;
 }
 
 		return $this->sql;
 	}  // eo prep sql with extjs request
+
+
+
+	/**
+	* Prepare parser tree
+	* @params $tree: Parsed and tokenized sql template tree
+	*/
+	public function prepParserTree($tree) {
+
+		if ($tree['SELECT']) {
+			$tree = $this->prepQuery($tree);
+		}
+
+		elseif ($tree['UNION'] || $tree['UNION ALL']) {
+			$tree = $this->prepUnion($tree);
+		}
+
+		return $tree;
+	}  // eo process parser tree
+
+
+	/**
+	* Prepare union tree
+	* A union tree consists of an non-assoziative array of two (or more?) full queries.
+	* @params $tree: Parsed and tokenized sql template tree
+	*/
+	public function prepUnion($tree) {
+
+		foreach ($tree as $unionType => &$unionTree) {
+			foreach ($unionTree as &$subTree) {
+				$subTree = $this->prepQuery($subTree);
+			}
+		}
+
+		return $tree;
+	}  // eo process union
 
 
 
