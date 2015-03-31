@@ -124,7 +124,7 @@ class OgerDb {
 		$tmpMsg = "";
 		$delim = "";
 		$params = array_flip($params);
-		foreach ($valKeys as $key => $value) {
+		foreach ((array)$valKeys as $key => $value) {
 			if (!array_key_exists($key, $params)) {
 				$tmpMsg .= "$delim$key";
 				$delim = ", ";

@@ -694,7 +694,7 @@ if (static::$devDebug) {
 				}
 
 				// replace template with prepared values
-				foreach ($aExpr['cols'] as $colName) {
+				foreach ((array)$aExpr['cols'] as $colName) {
 					$token['base_expr'] = $colName;
 					//$token['no_quotes']['parts'] = array($colName);
 					$token['direction'] = $extjsSorters[$key];
