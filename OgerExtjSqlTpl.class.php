@@ -436,7 +436,7 @@ if (static::$devDebug) {
 	public function prepWhere($sequence) {
 
 		// get extjs filter from request
-		$extFilter = $this->getStoreFilter();
+		$extjsFilter = $this->getStoreFilter();
 
 		$parts = array();
 		$queue = array();
@@ -527,8 +527,8 @@ if (static::$devDebug) {
 					$usePart = true;
 				}
 				// otherwise if pnam exists in extjs filter vals then we take this
-				elseif (array_key_exists($pnam, $extFilter)) {
-					$value = $extFilter[$pnam];
+				elseif (array_key_exists($pnam, $extjsFilter)) {
+					$value = $extjsFilter[$pnam];
 					$usePart = true;
 				}
 				// otherwise if pnam elsewhere in values (request) then we take this
@@ -651,12 +651,12 @@ if (static::$devDebug) {
 		// postprocess template token (handle default sort)
 		// if sort key has no sort expression then use default sort
 		// if no default sort exists then remove key completly
-		$defaultCols = $orderByToken[''];
+		$defaultSortCols = $orderByToken[''];
 		unset($orderByToken['']);
 		foreach($orderByToken as $key => $cols) {
 			if (!$cols) {
-				if ($defaultCols) {
-					$orderByToken[$key] = $defaultCols;
+				if ($defaultSortCols) {
+					$orderByToken[$key] = $defaultSortCols;
 				}
 				else {
 					unset($orderByToken[$key]);
@@ -666,8 +666,8 @@ if (static::$devDebug) {
 
 
 		// get store sorter and do sanity check
-		$extSort = $this->getStoreSort();
-		foreach ($extSort as $colName => &$direct) {
+		$extjsSorters = $this->getStoreSort();
+		foreach ($extjsSorters as $colName => &$direct) {
 			$direct = trim(strtoupper($direct));
 			if (!$direct) {
 				$direct = "ASC";
@@ -689,7 +689,7 @@ if (static::$devDebug) {
 				$key = $aExpr['key'];
 
 				// if there is no extjs sort info for this token then we skip
-				if (!$extSort[$key]) {
+				if (!$extjsSorters[$key]) {
 					continue;
 				}
 
@@ -697,7 +697,7 @@ if (static::$devDebug) {
 				foreach ($aExpr['cols'] as $colName) {
 					$token['base_expr'] = $colName;
 					//$token['no_quotes']['parts'] = array($colName);
-					$token['direction'] = $extSort[$key];
+					$token['direction'] = $extjsSorters[$key];
 					$sequenceOut[] = $token;
 				}  // eo column loop
 
@@ -709,11 +709,21 @@ if (static::$devDebug) {
 
 		}  // eo prep loop
 
-		// if there is no order by token but we have a default sort
+
+		// if there is no order by token, but there is a extjs sorter
+		// this means that the extjs sorter doesnt match any template sorter.
+		// In this case we throw an exeption. The default sort is only
+		// used if no extjs sorter is present
+		if (!$sequenceOut && $extjsSorters) {
+			echo Extjs::errorMsg(sprintf("Invalid Sort '%s'.", current(array_keys($extjsSorters))));
+			exit;
+		}
+
+		// if there is no order by token, but we have a default sort
 		// then we use the default cols to create order by tokens
 		// TODO delegate token creation to a createOrderByToken function?
-		if (!$sequenceOut && $defaultCols) {
-			foreach ($defaultCols as $colName) {
+		if (!$sequenceOut && $defaultSortCols) {
+			foreach ($defaultSortCols as $colName) {
 				$sequenceOut[] = array(
 					'expr_type' => 'colref',
 					'base_expr' => $colName,
