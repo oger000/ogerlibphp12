@@ -70,14 +70,29 @@ class OgerDateTime extends DateTime {
 
 
 	/**
-	 * Is before christ
-	 * Als (miss)used to check for empty sqldate
-	 * mysql "0000-00-00" result in DateTime "-0001-11-30"
-	 * (see http://php.net/manual/de/datetime.construct.php)
+	 * Check if time is empty
 	*/
-	public function isBC() {
-		return ($this->format("Y") < 0);
-	}  // eo is bc
+	public static function _isEmpty($timeStr, $opts = array()) {
+
+		$timeStr = trim($timeStr);
+
+		if (!$timeStr) {
+			return true;
+		}
+
+		// check sql date (TODO improve)
+		if (substr($timeStr, 0, 10 == "0000-00-00") && !$opts['allowZeroYear']) {
+			return true;
+		}
+
+		// invalid date is reported empty
+		// numeric values are handled as already parsed with strtotime
+		if (!is_numeric($timeStr) && strtotime($timeStr) === false) {
+			return true;
+		}
+
+		return false;
+	}  // eo is empty
 
 
 
