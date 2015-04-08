@@ -80,8 +80,8 @@ class OgerDateTime extends DateTime {
 			return true;
 		}
 
-		// check sql date (TODO improve)
-		if (substr($timeStr, 0, 10 == "0000-00-00") && !$opts['allowZeroYear']) {
+		// check sql date (maybe can be improved ???)
+		if (substr($timeStr, 0, 10) == "0000-00-00" && !$opts['allowZeroYear']) {
 			return true;
 		}
 
