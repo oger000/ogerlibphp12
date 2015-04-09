@@ -638,7 +638,7 @@ if (static::$devDebug) {
 					$this->isTplExpr($token['base_expr'])) {
 
 				$aExpr = $this->unpackOrderByExpr($token['base_expr']);
-				$orderByToken[$aExpr['key']] = $aExpr['cols'];
+				$orderByToken[$aExpr['key']] = $aExpr['seq'];
 
 			}  // eo template token
 		}  // eo read template
@@ -651,12 +651,12 @@ if (static::$devDebug) {
 		// postprocess template token (handle default sort)
 		// if sort key has no sort expression then use default sort
 		// if no default sort exists then remove key completly
-		$defaultSortCols = $orderByToken[''];
+		$defaultSortSeq = $orderByToken[''];
 		unset($orderByToken['']);
-		foreach($orderByToken as $key => $cols) {
-			if (!$cols) {
-				if ($defaultSortCols) {
-					$orderByToken[$key] = $defaultSortCols;
+		foreach($orderByToken as $key => $seq) {
+			if (!$seq) {
+				if ($defaultSortSeq) {
+					$orderByToken[$key] = $defaultSortSeq;
 				}
 				else {
 					unset($orderByToken[$key]);
@@ -694,11 +694,19 @@ if (static::$devDebug) {
 				}
 
 				// replace template with prepared values
-				foreach ((array)$orderByToken[$key] as $colName) {
-					$token['base_expr'] = $colName;
-					//$token['no_quotes']['parts'] = array($colName);
-					$token['direction'] = $extjsSorters[$key];
-					$sequenceOut[] = $token;
+				foreach ((array)$orderByToken[$key] as $newToken) {
+					$extDirect = $extjsSorters[$key];
+					// if the original template direction is DESC
+					// we reverse the direction of extjs sorts
+					if ($newToken['direction'] == "DESC") {
+						$extDirect = ($extDirect == "ASC" ? "DESC" : "ASC");
+					}
+					if ($newToken['forceDirection']) {
+						$extDirect = $newToken['forceDirection'];
+						unset($newToken['forceDirection']);
+					}
+					$newToken['direction'] = $extDirect;
+					$sequenceOut[] = $newToken;
 				}  // eo column loop
 
 			}  // template expr
@@ -722,20 +730,9 @@ if (static::$devDebug) {
 		// if there is no order by token, but we have a default sort
 		// then we use the default cols to create order by tokens
 		// TODO delegate token creation to a createOrderByToken function?
-		if (!$sequenceOut && $defaultSortCols) {
-			foreach ($defaultSortCols as $colName) {
-				$sequenceOut[] = array(
-					'expr_type' => 'colref',
-					'base_expr' => $colName,
-					'no_quotes' => array (
-						'delim' => false,
-						'parts' => array (
-							0 => $colName,
-						),
-					),
-					'sub_tree' => false,
-					'direction' => 'ASC',
-				);
+		if (!$sequenceOut && $defaultSortSeq) {
+			foreach ($defaultSortSeq as $newToken) {
+				$sequenceOut[] = $newToken;
 			}  // eo col loop
 		}  // eo default sort
 
@@ -843,12 +840,15 @@ if (static::$devDebug) {
 		}
 
 		// if a key, but no expression is given, then the
-		// cols remain empty and is replaced with the default sort later
+		// seq remain empty and is replaced with the default sort later
 		if ($expr) {
-			$cols = explode(",", $expr);
+			$parser = new PHPSQLParser\PHPSQLParser();
+			$parsed = $parser->parse("SELECT * FROM dummy ORDER BY {$expr}");
+			$seq = $parsed['ORDER'];
+			unset($parser);
 		}
 
-		return array("key" => $key, "cols" => $cols);
+		return array("key" => $key, "seq" => $seq);
 	}  // eo unpack order expr
 
 
