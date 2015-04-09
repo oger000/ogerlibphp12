@@ -630,41 +630,6 @@ if (static::$devDebug) {
 	*/
 	public function prepOrderBy($sequence) {
 
-		// extract all template items
-		$orderByToken = array();
-		foreach ($sequence as $token) {
-
-			if ($token['expr_type'] == "colref" &&
-					$this->isTplExpr($token['base_expr'])) {
-
-				$aExpr = $this->unpackOrderByExpr($token['base_expr']);
-				$orderByToken[$aExpr['key']] = $aExpr['seq'];
-
-			}  // eo template token
-		}  // eo read template
-
-		// if there are no template tokens return the sequence unchanged
-		if (!$orderByToken) {
-			return $sequence;
-		}
-
-		// postprocess template token (handle default sort)
-		// if sort key has no sort expression then use default sort
-		// if no default sort exists then remove key completly
-		$defaultSortSeq = $orderByToken[''];
-		unset($orderByToken['']);
-		foreach($orderByToken as $key => $seq) {
-			if (!$seq) {
-				if ($defaultSortSeq) {
-					$orderByToken[$key] = $defaultSortSeq;
-				}
-				else {
-					unset($orderByToken[$key]);
-				}
-			}
-		} // eo post prep tokens
-
-
 		// get store sorter and do sanity check
 		$extjsSorters = $this->getStoreSort();
 		foreach ($extjsSorters as $colName => &$direct) {
@@ -679,6 +644,7 @@ if (static::$devDebug) {
 
 
 		// replace / remove template token with sql expression
+		$defaultSortSeq = array();
 		$sequenceOut = array();
 		foreach ($sequence as $token) {
 
@@ -687,14 +653,31 @@ if (static::$devDebug) {
 
 				$aExpr = $this->unpackOrderByExpr($token['base_expr']);
 				$key = $aExpr['key'];
+				$orderSeq = $aExpr['seq'];
+
+				// catch default sort
+				if (!$key) {
+					$defaultSortSeq = $orderSeq;
+					continue;
+				}
 
 				// if there is no extjs sort info for this token then we skip
 				if (!$extjsSorters[$key]) {
 					continue;
 				}
 
-				// replace template with prepared values
-				foreach ((array)$orderByToken[$key] as $newToken) {
+				// if order seq is empty, then we replace with default order
+				// if there is no default order we skip
+				// ATTENTION: default order must be BEFORE using reference to it
+				if (!$orderSeq) {
+					if (!$defaultSortSeq) {
+						continue;
+					}
+					$orderSeq = $defaultSortSeq;
+				}
+
+				// replace template with order sequence
+				foreach ((array)$orderSeq as $newToken) {
 					$extDirect = $extjsSorters[$key];
 					// if the original template direction is DESC
 					// we reverse the direction of extjs sorts
