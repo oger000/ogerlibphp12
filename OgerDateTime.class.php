@@ -105,6 +105,37 @@ class OgerDateTime extends DateTime {
 	}  // eo day diff
 
 
+	/*
+	 * Get diff with extended parameter handling
+	 * Date1 and date2 can be string or DateTime objects.
+	 * Empty dates result in null value !!!
+	 * Return DateInterval object.
+	 */
+	public static function _xDiff($date1, $date2) {
+
+		if (is_string($date1)) {
+			if (OgerDateTime::_isEmpty($date1)) {
+				return null;
+			}
+			$date1 = new DateTime($date1);
+			if (!$date1) {  // invalid date
+				return null;
+			}
+		}
+
+		if (is_string($date2)) {
+			if (OgerDateTime::_isEmpty($date2)) {
+				return null;
+			}
+			$date2 = new DateTime($date2);
+			if (!$date2) {  // invalid date
+				return null;
+			}
+		}
+
+		return $date1->diff($date2);
+	}  // eo get x-diff
+
 
 }  // eo class
 
