@@ -101,7 +101,11 @@ class OgerDateTime extends DateTime {
 	*/
 	public function diffDays($dateTime, $absolute = false) {
 		$interval = $this->diff($dateTime, $absolute);
-		return $interval->days;
+		$days = $interval->days;
+		if (!$absolute && $interval->invert) {
+			$days *= -1;
+		}
+		return $days;
 	}  // eo day diff
 
 
