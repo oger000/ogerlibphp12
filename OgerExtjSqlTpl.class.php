@@ -397,9 +397,22 @@ if (static::$devDebug) {
 				$token['sub_tree'] = $this->prepWhere($token['sub_tree']);
 			}
 			else {
-				// Maybe bracket expressions only exists in where clauses, but we dont know -
+				// Maybe bracket_expression only exists in where clauses, but we dont know -
 				// so throw an exeption to detect it.
 				throw new Exception("Found bracket_expression in prepSubtree mode without whereMode.");
+			}
+			return $token;
+		}
+
+
+		// handle in-list of IN clause
+		if ($token['expr_type'] == "in-list") {
+			if ($whereMode) {
+				$token['sub_tree'] = $this->prepWhere($token['sub_tree']);
+			}
+			else {
+				// in-list only exists in where clause
+				throw new Exception("Found in-list in prepSubtree mode without whereMode.");
 			}
 			return $token;
 		}
@@ -461,10 +474,13 @@ if (static::$devDebug) {
 			$usePart = true;
 			$tmpParamValues = array();
 
+			// check one and/or sequence
+			// ALL template expressions have to match,
+			// otherwise the FULL and/or sequence is discarded
 			$tmpAndOrSeq = array();
 			foreach ($andOrSeq as $token) {
 
-				// we are only interested in named sql params "`?:xxx`"
+				// we are only interested in named sql params "`?xxx`"
 				if (!($token['expr_type'] == "colref" &&
 							$this->isTplExpr($token['base_expr']))
 					 ) {
@@ -483,6 +499,7 @@ if (static::$devDebug) {
 				$isRequiredParam = false;
 				$onlyIfHasValue = false;
 				//$onlyIfHasTrimmedValue = false;
+				$isMultiParam = false;
 
 				// loop over internal command chars
 				$cmdCharLoop = true;
@@ -510,6 +527,15 @@ if (static::$devDebug) {
 					// TODO extra cmd-char for: not-empty (trimmed) ???
 					if (substr($pnam, 0, 1) == "+") {
 						$onlyIfHasValue = true;
+						$pnam = substr($pnam, 1);
+						continue;
+					}
+					// create a list of numbered params (e.g. for IN clause)
+					// for now only "," is a valid delimiter (in and out)
+					// TODO allow other in-delimiter (syntax e.g. `?#;#:foo`) ???
+					if (substr($pnam, 0, 1) == "#") {
+						$isMultiParam = true;
+						$multiDelimIn = ",";
 						$pnam = substr($pnam, 1);
 						continue;
 					}
@@ -553,13 +579,13 @@ if (static::$devDebug) {
 					break;
 				}
 
-				// final test if part is used
+				// final test, if part is used at all
 				if (!$usePart) {
 					break;
 				}
 
 				if ($doRemovePnam) {
-					continue;  // next token - use part, but not pnam
+					continue;  // next token - use part, but remove pnam
 				}
 
 				// polish pnam
@@ -570,12 +596,37 @@ if (static::$devDebug) {
 					$pnamOut = $pnam;
 				}
 
+				// for mulit param we repeat for each item of the value list
+				if ($isMultiParam) {
+
+					$multiVals = (is_string($value) ? explode($multiDelimIn, $value) : $value);
+
+					$tmpCnt = 0;
+					foreach ((array)$multiVals as $tmpVal) {
+
+						$tmpCnt++;
+						$multiPnam = $pnam . $tmpCnt;
+						$multiPnamOut = $pnamOut . $tmpCnt;
+
+						$tmpParamValues[$multiPnam] = $tmpVal;
+
+						$token['base_expr'] = $multiPnamOut;
+						$token['no_quotes'] = $multiPnamOut;
+						$tmpAndOrSeq[] = $token;
+					}
+
+					continue;
+				}  // eo multiparam
+
+
+				// add value and standard token to sequence
+				$tmpParamValues[$pnam] = $value;
+
 				$token['base_expr'] = $pnamOut;
 				$token['no_quotes'] = $pnamOut;
-
 				$tmpAndOrSeq[] = $token;
 
-				// end prep named sql params
+				// end of prep named sql params
 
 			}  // eo loop over all tokens of one part
 			$andOrSeq = $tmpAndOrSeq;
@@ -595,9 +646,12 @@ if (static::$devDebug) {
 			foreach ($andOrSeq as $key => $token) {
 				if ($token['sub_tree']) {
 					$token = $this->prepSubtree($token, true);
-					// if token subtree is empty, then we ignore
+					// if token subtree is empty, then we ignore the full anOrSequence,
+					// because otherwise the expression is incomplete in most cases !!!
+					// Maybe we ingnore too much this way, but we have a valid sql syntax
 					if (!$token['sub_tree']) {
-						continue;
+						$tmpAndOrSeq = array();
+						break;
 					}
 				}
 				$tmpAndOrSeq[] = $token;
