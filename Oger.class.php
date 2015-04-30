@@ -213,6 +213,51 @@ class Oger {
 	}  // eo beautify json
 
 
+
+	/*
+	 * Format an array of rows into csv text file
+	 */
+	public static function rowArrayToCsv($arr, $delim = ";", $enc = '"', $nl = "\n", $escMode = "EXCEL") {
+
+		$out = "";
+
+		foreach ((array)$arr as $row) {
+			$out .= static::arrayToCsvRow($row,  $delim = ";", $enc = '"', $nl = "\n", $escMode = "EXCEL");
+		}
+
+		return $out;
+	}  // eo array of rows to csv
+
+	/*
+	 * Format an array into csv delimited row
+	 */
+	public static function arrayToCsvRow($arr, $delim = ";", $enc = '"', $nl = "\n", $escMode = "EXCEL") {
+
+		$out = "";
+		$tmpDelim = "";
+
+		foreach ((array)$arr as $field) {
+
+			switch ($escMode) {
+			case "EXCEL":
+				$field = str_replace($enc, "{$enc}{$enc}", $field);
+				break;
+			case "UNIX":
+				$field = str_replace("\\", "\\\\", $field);   // escape the escape char too
+				$field = str_replace($enc, "\{$enc}", $field);
+				break;
+			}
+
+			$out .= "{$tmpDelim}{$enc}{$field}{$enc}";
+			$tmpDelim = $delim;
+		}  // eo fields
+
+		return "{$out}{$nl}";
+	}  // eo array to csv
+
+
+
+
 }  // eo class
 
 ?>
