@@ -274,6 +274,27 @@ class OgerDb {
 	}  // eo valid column chars
 
 
+
+	/**
+	* Get mysql error message from exception
+	*/
+	public static function getMyErrorMsg($ex) {
+
+		$oriMsg = $ex->getMessage();
+		$errMsg = $oriMsg;
+
+		switch ($ex->errorInfo[1]) {
+		case 1451:
+			$errMsg = sprintf(Oger::_("Fehler durch verknüpfte Datensätze: %s"), $oriMsg);
+			break;
+		}  // eo switch
+
+		return $errMsg;
+	}  // eo mysql error msg
+
+
+
+
 }  // eo class
 
 
