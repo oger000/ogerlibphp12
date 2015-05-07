@@ -141,6 +141,42 @@ class OgerDateTime extends DateTime {
 	}  // eo get x-diff
 
 
+
+	/*
+	 * Static function for formated date output
+	 * Date can be string, a unix timestamp or DateTime object.
+	 */
+	public static function _formatDate($dateIn, $format = null) {
+
+		if (!$dateIn) {
+			return "";
+		}
+
+		$format = ($format ?: static::$defaultDateFormat);
+
+		if (is_string($dateIn)) {
+			if (OgerDateTime::_isEmpty($dateIn)) {
+				return "";
+			}
+			$date = new DateTime($dateIn);
+			if (!$date) {  // invalid date
+				return "";
+			}
+		}
+		elseif (is_numeric($dateIn)) {
+			$date = new DateTime();
+			$date.setTimestamp($dateIn);
+		}
+		else {
+			$date = $dateIn;
+		}
+
+		return $date->format($format);
+	}  // eo static date format
+
+
+
+
 }  // eo class
 
 ?>
