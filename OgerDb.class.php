@@ -284,6 +284,9 @@ class OgerDb {
 		$errMsg = $oriMsg;
 
 		switch ($ex->errorInfo[1]) {
+		case 1062:
+			$errMsg = sprintf(Oger::_("Unerlaubtes Duplikat: %s"), $oriMsg);
+			break;
 		case 1451:
 			$errMsg = sprintf(Oger::_("Fehler durch verknüpfte Datensätze: %s"), $oriMsg);
 			break;
