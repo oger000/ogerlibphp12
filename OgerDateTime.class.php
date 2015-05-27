@@ -117,6 +117,10 @@ class OgerDateTime extends DateTime {
 	 */
 	public static function _xDiff($date1, $date2) {
 
+		if (!($date1 && $date2)) {
+			return null;
+		}
+
 		if (is_string($date1)) {
 			if (OgerDateTime::_isEmpty($date1)) {
 				return null;
