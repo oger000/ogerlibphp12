@@ -228,6 +228,7 @@ class Oger {
 		return $out;
 	}  // eo array of rows to csv
 
+
 	/*
 	 * Format an array into csv delimited row
 	 */
@@ -255,6 +256,28 @@ class Oger {
 		return "{$out}{$nl}";
 	}  // eo array to csv
 
+
+
+	/*
+	 * Check if the current connection has a valid ssl client certificate
+	 */
+	public static function connectionHasValidSslClientCert() {
+
+		if ($_SERVER['SSL_CLIENT_VERIFY'] == 'SUCCESS'  // NONE, SUCCESS, GENEROUS or FAILED:reason
+			|| isset($_SERVER['SSL_CLIENT_M_SERIAL'])  // The serial of the server certificate
+			|| isset($_SERVER['SSL_CLIENT_V_END'])  // Validity of client's certificate (end time)
+																							 // e.g: 'Mar 14 16:02:00 2016 GMT')
+			|| isset($_SERVER['SSL_CLIENT_I_DN'])  // Issuer DN of client's certificate
+				 // e.g: 'emailAddress=office@asinoe.at, CN=asinoe.at, O=asinoe.at, L=Krems, C=AT'
+			|| isset($_SERVER['SSL_CLIENT_S_DN'])  // Issuer DN of client's certificate
+				 // e.g: 'emailAddress=gerhard.oettl@asinoe.at, CN=gerhard.oettl@asinoe.at, OU=Leitung, O=asinoe.at, L=Krems, C=AT'
+			|| $_SERVER['SSL_CLIENT_V_REMAIN'] > 0  // Number of days until client's certificate expires
+		)	{
+			return true;
+		}
+
+		return false;
+	}  // eo check for valid ssl connection
 
 
 
