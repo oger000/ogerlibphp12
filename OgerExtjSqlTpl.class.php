@@ -798,17 +798,16 @@ if (static::$devDebug) {
 
 		$extLimit = $this->getStoreLimit();
 
-		// if there is no store limit, then remove the limit token at all
-		if (!$extLimit['limit']) {
-			return array();
-		}
-
 		if ($this->unEnc($token['offset']) == "?start") {
 			$token['offset'] = $extLimit['start'];
 		}
 
 		if ($this->unEnc($token['rowcount']) == "?limit") {
 			$token['rowcount'] = $extLimit['limit'];
+		}
+
+		if (!($token['offset'] || $token['rowcount'])) {
+			return array();
 		}
 
 		return $token;
