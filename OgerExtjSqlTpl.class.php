@@ -243,6 +243,7 @@ if (static::$devDebug) {
 	//exit;
 }
 
+//$tplOpts['skip-php-sql-oger-prepare'] = true;
 		if (!$tplOpts['skip-php-sql-oger-prepare']) {
 			$this->prepared = $this->prepParserTree($this->parsed);
 if (static::$devDebug) {
@@ -392,6 +393,8 @@ if (static::$devDebug) {
 		}
 
 		// handle bracket expression (maybe incomplete)
+		// primary used with subqueries but also for embraced calculations
+		// like "(col1 * col2) AS newCol"
 		if ($token['expr_type'] == "bracket_expression") {
 			if ($whereMode) {
 				$token['sub_tree'] = $this->prepWhere($token['sub_tree']);
@@ -399,7 +402,7 @@ if (static::$devDebug) {
 			else {
 				// Maybe bracket_expression only exists in where clauses, but we dont know -
 				// so throw an exeption to detect it.
-				throw new Exception("Found bracket_expression in prepSubtree mode without whereMode.");
+				//throw new Exception("Found bracket_expression in prepSubtree mode without whereMode.");
 			}
 			return $token;
 		}
@@ -646,7 +649,7 @@ if (static::$devDebug) {
 			foreach ($andOrSeq as $key => $token) {
 				if ($token['sub_tree']) {
 					$token = $this->prepSubtree($token, true);
-					// if token subtree is empty, then we ignore the full anOrSequence,
+					// if token subtree is empty, then we ignore the full andOrSequence,
 					// because otherwise the expression is incomplete in most cases !!!
 					// Maybe we ingnore too much this way, but we have a valid sql syntax
 					if (!$token['sub_tree']) {
