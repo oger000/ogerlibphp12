@@ -112,29 +112,29 @@ class OgerDateTime extends DateTime {
 	/*
 	 * Get diff with extended parameter handling
 	 * Date1 and date2 can be string or DateTime objects.
-	 * Empty dates result in null value !!!
+	 * Date1 before date2 - otherwise the interval is negative.
+	 * Empty dates are replaced by NOW.
+	 * Invalid dates result in null.
 	 * Return DateInterval object.
 	 */
-	public static function _xDiff($date1, $date2) {
+	public static function _xDiff($date1 = null, $date2 = null) {
 
-		if (!($date1 && $date2)) {
-			return null;
+		if (static::_isEmpty($date1)) {
+			$date1 = "NOW";
 		}
 
 		if (is_string($date1)) {
-			if (OgerDateTime::_isEmpty($date1)) {
-				return null;
-			}
 			$date1 = new DateTime($date1);
 			if (!$date1) {  // invalid date
 				return null;
 			}
 		}
 
+		if (static::_isEmpty($date2)) {
+			$date2 = "NOW";
+		}
+
 		if (is_string($date2)) {
-			if (OgerDateTime::_isEmpty($date2)) {
-				return null;
-			}
 			$date2 = new DateTime($date2);
 			if (!$date2) {  // invalid date
 				return null;
