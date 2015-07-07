@@ -2,7 +2,7 @@
 /**
  * ExpressionType.php
  *
- * Defines all values, which are possible for the [expr_type] field
+ * Defines all values, which are possible for the [expr_type] field 
  * within the parser output.
  *
  * PHP version 5
@@ -32,18 +32,18 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
+ * 
  * @author    André Rothe <andre.rothe@phosco.info>
  * @copyright 2010-2014 Justin Swanhart and André Rothe
  * @license   http://www.debian.org/misc/bsd.license  BSD License (3 Clause)
  * @version   SVN: $Id$
- *
+ * 
  */
 
 namespace PHPSQLParser\utils;
 
 /**
- * This class defines all values, which are possible for the [expr_type] field
+ * This class defines all values, which are possible for the [expr_type] field 
  * within the parser output.
  *
  * @author  André Rothe <andre.rothe@phosco.info>
@@ -119,7 +119,7 @@ class ExpressionType {
     const COLUMN_TYPE = 'column-type';
     const DEF_VALUE = 'default-value';
     const COMMENT = 'comment';
-
+    
     const PARTITION = 'partition';
     const PARTITION_LIST = 'partition-list';
     const PARTITION_RANGE = 'partition-range';
@@ -134,7 +134,7 @@ class ExpressionType {
     const PARTITION_MAX_ROWS = 'partition-max-rows';
     const PARTITION_MIN_ROWS = 'partition-min-rows';
     const PARTITION_KEY_ALGORITHM = 'partition-key-algorithm';
-
+    
     const SUBPARTITION = 'sub-partition';
     const SUBPARTITION_DEF = 'sub-partition-def';
     const SUBPARTITION_HASH = 'sub-partition-hash';
@@ -146,7 +146,7 @@ class ExpressionType {
     const SUBPARTITION_MAX_ROWS = 'sub-partition-max-rows';
     const SUBPARTITION_MIN_ROWS = 'sub-partition-min-rows';
     const SUBPARTITION_KEY_ALGORITHM = 'sub-partition-key-algorithm';
-
+    
     const QUERY = 'query';
     const SUBQUERY_FACTORING = 'subquery-factoring';
 }
