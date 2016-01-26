@@ -47,6 +47,24 @@ class Oger {
 	}  // eo assoc check
 
 
+/**
+ * Merge two or more arrays and preserve numeric keys
+ * DEPRECATED: only for backward compatibility with ogerArch
+ */
+public static function arrayMergeAssoc() {
+	$result = array();
+	$arrays = func_get_args();
+	foreach($arrays as $array) {
+		if ($array == null) {
+			continue;
+		}
+		foreach($array as $key => $value) {
+			$result[$key] = $value;
+		}
+	}
+	return $result;
+}  // eo array merge assoc
+
 	/**
 	* Restart session without warnings
 	* Cookie based sessions give a warning if reopened after output.
