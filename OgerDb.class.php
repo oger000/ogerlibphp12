@@ -196,14 +196,26 @@ class OgerDb {
 
 		$stmt = '';
 
-		// if  an associative array use keys as parameter name
-		if (Oger::isAssocArray($params)) {
-			$params = array_keys($params);
+		// if not an associative array, then make it
+		if (!Oger::isAssocArray($params)) {
+			$tmp = array();
+			foreach ($params as $paramName) {
+				$tmp[$paramName] = $paramName;
+			}
+			$params = $tmp;
 		}
 
 		// create where clause
-		foreach ($params as $paramName) {
-			$stmt .= ($stmt ? " $glueOp " : "") . static::encName($paramName) . "=:$paramName";
+		foreach ($params as $colName => $val) {
+			$stmt .= ($stmt ? " $glueOp " : "") . static::encName($colName) . "=:";
+			// if the value is another array, then the key contains the real parameter name
+			if (is_array($val)) {
+				reset($val);
+				$stmt .= key($val);
+			}
+			else {
+				$stmt .= "$colName";
+			}
 		}
 
 		return $stmt;

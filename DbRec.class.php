@@ -118,6 +118,19 @@ class DbRec {
 		$stmt = Dbw::getStoreStmt($storeAction, static::$tableName, $values, $where);
 		$pstmt = Dbw::$conn->prepare($stmt);
 
+
+		// cleanup where array if containes nested info
+		if (is_array($where)) {
+			foreach ($where as $key => $val) {
+				if (is_array($val)) {
+					unset($where[$key]);
+					reset($val);
+					$key = key($val);
+					$where[$key] = $val[$key];
+				}
+			}
+		}
+
 		// on update merge the where-values in, but preserve
 		// data-values if already present
 		if ($storeAction == "UPDATE" && is_array($where)) {
