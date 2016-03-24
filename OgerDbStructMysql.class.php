@@ -1279,8 +1279,8 @@ throw new Exception("woher?");
 	/**
 	* Reorder table columns.
 	* @param $refTableStruct Array with the reference table structure.
-	* TODO: find a way to have a single statement for insert/remove a column
-	*       instead of pubbling up/down all following columns
+	* TODO: find a way to have a single statement for move a column to a
+	*       higher oridinal position instead of pubbling up position by position
 	*/
 	public function reorderTableColumns($refTableStruct) {
 
