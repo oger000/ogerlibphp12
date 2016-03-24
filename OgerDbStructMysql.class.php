@@ -303,7 +303,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 		// correstponding table name is STATISTICS !
 
 		$pstmt = $this->conn->prepare("
-				SELECT TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME,	NON_UNIQUE
+				SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME,	NON_UNIQUE
 					FROM INFORMATION_SCHEMA.STATISTICS
 					WHERE TABLE_CATALOG=:catalogName AND
 								TABLE_SCHEMA=:dbName AND
@@ -1279,6 +1279,8 @@ throw new Exception("woher?");
 	/**
 	* Reorder table columns.
 	* @param $refTableStruct Array with the reference table structure.
+	* TODO: find a way to have a single statement for insert/remove a column
+	*       instead of pubbling up/down all following columns
 	*/
 	public function reorderTableColumns($refTableStruct) {
 
@@ -1621,8 +1623,6 @@ throw new Exception("woher?");
 
 		$stmt .= "{$indexKeyType}KEY{$indexName}";
 
-		// force order of columns and extract names
-		$this->orderIndexStructColumns($indexStruct["INDEX_COLUMNS"]);
 		$colNames = array();
 		foreach ((array)$indexStruct["INDEX_COLUMNS"] as $indexColumnStruct) {
 			$colNames[] = $this->quoteName($indexColumnStruct["COLUMN_NAME"]);
@@ -1643,12 +1643,9 @@ throw new Exception("woher?");
 	public function foreignKeyDefStmt($fkStruct) {
 
 		$fkName = $this->quoteName($fkStruct["FOREIGN_KEY_META"]["FOREIGN_KEY_NAME"]);
-
 		$stmt = "CONSTRAINT $fkName";
 
-		// force order of columns and extract names
 		// we assume that the column order in the reference is the same as in the foreign key
-		$this->orderForeignKeyStructColumns($fkStruct["FOREIGN_KEY_COLUMNS"]);
 		$colNames = array();
 		$colNamesRef = array();
 		foreach ((array)$fkStruct["FOREIGN_KEY_COLUMNS"] as $fkColumnStruct) {
@@ -1665,101 +1662,6 @@ throw new Exception("woher?");
 
 		return $stmt;
 	}  // eo foreign key def
-
-
-
-
-	// ##############################################
-	// HELPER METHODS (SORTING, ...)
-	// ##############################################
-
-
-
-	/**
-	* Force order of index columns.
-	* @param columns Array with the index columns structure.
-	*        The columns array is passed per reference so
-	*        the columns are ordered in place and you
-	*        dont need the return value.
-	* @return Ordered columns array.
-	*/
-	public function orderIndexStructColumns(&$columns) {
-
-		// if no columns then do nothing
-		if (!$columns) {
-			return $columns;
-		}
-
-		$tmpCols = array();
-
-		// preserve references
-		// for backward compability include ORDINAL_POSITION
-		foreach ($columns as $columnKey => &$columnStruct) {
-			$tmpCols[ ($columnStruct["ORDINAL_POSITION"] + $columnStruct["SEQ_IN_INDEX"]) * 1] = &$columnStruct;
-		}
-		unset($columnStruct);
-		ksort($tmpCols);
-
-		// assign back to original array
-		$columns = array();
-		foreach ($tmpCols as &$columnStruct) {
-			$columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
-		}
-		unset($columnStruct);
-
-		// return per value
-		return $columns;
-	}  // eo order index columns
-
-
-	/**
-	* Force order of foreign key columns.
-	* @param columns Array with the foreign key columns structure.
-	*        The columns array is passed per reference so
-	*        the columns are ordered in place and you
-	*        dont need the return value.
-	* @return Ordered columns array.
-	*/
-	public function orderForeignKeyStructColumns(&$columns) {
-
-		// if no columns then do nothing
-		if (!$columns) {
-			return $columns;
-		}
-
-		$tmpCols = array();
-
-		// preserve references
-		foreach ($columns as $columnKey => &$columnStruct) {
-			$tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
-		}
-		unset($columnStruct);
-		ksort($tmpCols);
-
-		// assign back to original array
-		$columns = array();
-		foreach ($tmpCols as &$columnStruct) {
-			$columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
-		}
-		unset($columnStruct);
-
-		// return per value
-		return $columns;
-	}  // eo order foreign key columns
-
-
-
-	/**
-	 * Reload the internal current database struct info.
-	 * Allow reload of internal current structure for external user.
-	 */
-	 /*
-	public function reloadCurDbStruct($opts = array()) {
-		$this->curDbStruct = $this->getDbStruct($opts);
-		return $this->curDbStruct;
-	}  // eo invalidate current dbstruct
-	*/
-
 
 
 
