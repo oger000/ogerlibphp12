@@ -42,6 +42,7 @@
  */
 class OgerDbStructMysql extends OgerDbStruct {
 
+	const BEFORE_FIRST_COL = -1;
 
 	protected $quoteNamBegin = '`';
 	protected $quoteNamEnd = '`';
@@ -236,7 +237,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 		// most important is COLUMN_TYPE - e.g. int(11)
 
 		$pstmt = $this->conn->prepare("
-				SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION,
+				SELECT TABLE_NAME, COLUMN_NAME,
 							 COLUMN_TYPE, DATA_TYPE,
 							 COLUMN_DEFAULT, IS_NULLABLE,
 							 CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, CHARACTER_SET_NAME, COLLATION_NAME,
@@ -302,12 +303,12 @@ class OgerDbStructMysql extends OgerDbStruct {
 		// correstponding table name is STATISTICS !
 
 		$pstmt = $this->conn->prepare("
-				SELECT TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX AS ORDINAL_POSITION, COLUMN_NAME,	NON_UNIQUE
+				SELECT TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME,	NON_UNIQUE
 					FROM INFORMATION_SCHEMA.STATISTICS
 					WHERE TABLE_CATALOG=:catalogName AND
 								TABLE_SCHEMA=:dbName AND
 								TABLE_NAME=:tableName
-					ORDER BY INDEX_NAME, ORDINAL_POSITION
+					ORDER BY INDEX_NAME, SEQ_IN_INDEX
 				");
 		$pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName, "tableName" => $tableName));
 		$indexRecords = $pstmt->fetchAll(PDO::FETCH_ASSOC);
@@ -368,7 +369,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 		// so we use table KEY_COLUMN_USAGE this time
 		// we do not support cross database settings, so we removed TABLE_SCHEMA and REFERENCED_TABLE_SCHEMA from query
 		$pstmt = $this->conn->prepare("
-				SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT,
+				SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, POSITION_IN_UNIQUE_CONSTRAINT,
 							 REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
 					FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
 					WHERE TABLE_CATALOG=:catalogName AND
@@ -674,9 +675,6 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 		$stmt = "CREATE TABLE $tableNameQ (\n  ";
 
-		// force column order
-		$this->asortColumnsByOrdinalPos($tableStruct["COLUMNS"]);
-
 		$delim = "";
 		foreach ((array)$tableStruct["COLUMNS"] as $columnStruct) {
 			$stmt .= $delim . $this->columnDefStmt($columnStruct);
@@ -725,8 +723,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 		$this->handleTableCase($refTableStruct);
 		$curTableStruct = $this->curDbStruct["TABLES"][strtolower($refTableStruct["TABLE_META"]["TABLE_NAME"])];
 
-		$this->asortColumnsByOrdinalPos($refTableStruct["COLUMNS"]);
-		$afterColumnName = -1;
+		$afterColumnName = static::BEFORE_FIRST_COL;
 		foreach ((array)$refTableStruct["COLUMNS"] as $refColumnKey => $refColumnStruct) {
 			if (!$curTableStruct["COLUMNS"][$refColumnKey]) {
 				$this->addTableColumn($refColumnStruct, $afterColumnName);
@@ -783,7 +780,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 	/**
 	* Add a column to a table structure.
 	* @param $columnStruct Array with the table structure.
-	* @param $afterColumnName: Passed to columnDefStmd(). Description see there.
+	* @param $afterColumnName: Passed to columnDefStmt(). Description see there.
 	*/
 	public function addTableColumn($columnStruct, $afterColumnName) {
 
@@ -798,26 +795,28 @@ class OgerDbStructMysql extends OgerDbStruct {
 		// update current db struct array
 		$tableKey = strtolower($tableName);
 		$colKey = strtolower($columnStruct["COLUMN_NAME"]);
+
+		// append after last existing column by default
+		$afterColPos = count($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
 		if ($afterColumnName) {
-			if ($afterColumnName == -1) {  // first position
+			if ($afterColumnName == static::BEFORE_FIRST_COL) {
 				$afterColPos = 0;            // ordinal pos starts at 1
 			}
 			else {
-				$afterColPos = $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][strtolower($afterColumnName)]["ORDINAL_POSITION"];
+				foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as $tmpColKey => $tmpCol) {
+					$afterColPos++;
+					if ($tmpColKey == strtolower($afterColumnName)) {
+						break;
+					}
+				}
 			}
 		}
-		else {  // append - last ordinal pos is column count
-			$afterColPos = count($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
-		}
-		foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as &$tmpCol) {
-			if ($tmpCol["ORDINAL_POSITION"] > $afterColPos) {
-				$tmpCol["ORDINAL_POSITION"]++;
-			}
-		}
-		$columnStruct["ORDINAL_POSITION"] = $afterColPos + 1;
-		$this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$colKey] = $columnStruct;
-		// reorder column struct array
-		$this->asortColumnsByOrdinalPos($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
+
+		// insert new column info at correct position into column struct array
+		$this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] =
+			array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], 0, $afterColPos, true) +
+			array($colKey => $columnStruct) +
+			array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], $afterColPos, NULL, true);
 
 	}  // eo add column to table
 
@@ -1072,11 +1071,10 @@ class OgerDbStructMysql extends OgerDbStruct {
 																		"-- New: $refColumnSql\n");
 
 			// TODO: include [ AFTER ... | FIRST ] position here?
-			$stmt = "ALTER TABLE {$tableNameQ} CHANGE COLUMN $curColumnName $refColumnSql";
+			$stmt = "ALTER TABLE $tableNameQ CHANGE COLUMN $curColumnName $refColumnSql";
 			$this->execChange($stmt);
 
-			// preserve ordinal position and update current db struct array
-			$refColumnStruct["ORDINAL_POSITION"] = $curColumnStruct["ORDINAL_POSITION"];
+			// preserve update current db struct array
 			$this->curDbStruct["TABLES"][strtolower($tableName)]
 												["COLUMNS"][strtolower($columnName)] = $refColumnStruct;
 
@@ -1293,23 +1291,27 @@ throw new Exception("woher?");
 		// rename lettercase
 		$this->handleTableCase($refTableStruct);
 
-		// sort reference columns by ordinal positions
-		$this->asortColumnsByOrdinalPos($refTableStruct["COLUMNS"]);
-
-		$afterColumnName = -1;
+		$afterColumnName = static::BEFORE_FIRST_COL;
 		$afterColPos = 0;            // ordinal pos starts at 1
 		foreach ((array)$refTableStruct["COLUMNS"] as $refColKey => $refColumnStruct) {
 
 			$curColumnStruct = $this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$refColKey];
 
-			// skip columns that does not exist in the current table
+			// skip reference columns that does not exist in the current table
 			if (!$curColumnStruct) {
 				continue;
 			}
 
 			$colName = $curColumnStruct["COLUMN_NAME"];
 			$newColPos = $afterColPos + 1;
-			$oldColPos = $curColumnStruct["ORDINAL_POSITION"];
+
+			$oldColPos = 0;
+			foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as $tmpColKey => $tmpCol) {
+				$oldColPos++;
+				if ($tmpColKey == strtolower($colName)) {
+					break;
+				}
+			}
 
 			if ($oldColPos != $newColPos) {
 				// use current column structure because we dont want to change the column definition but only the order
@@ -1317,28 +1319,22 @@ throw new Exception("woher?");
 				$colNameQ = $this->quoteName($colName);
 				$this->log(static::LOG_DEBUG, "-- OldColumnPos: $oldColPos\n" .
 																			"-- NewColumnPos: $newColPos\n");
-				$stmt = "ALTER TABLE $tableNameQ CHANGE COLUMN $colNameQ $columnDef";
+				$stmt = "ALTER TABLE {$tableNameQ} CHANGE COLUMN $colNameQ $columnDef";
 				$this->execChange($stmt);
 
 				// update current db struct array
-				foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as &$tmpCol) {
-					if ($tmpCol["ORDINAL_POSITION"] >= $newColPos &&
-							$tmpCol["ORDINAL_POSITION"] < $oldColPos) {
-						$tmpCol["ORDINAL_POSITION"]++;
-					}
-				}
-				$this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$refColKey]["ORDINAL_POSITION"] = $newColPos;
+				unset($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$refColKey]);
+				$this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] =
+					array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], 0, $afterColPos, true) +
+					array($refColKey => $curColumnStruct) +
+					array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], $afterColPos, NULL, true);
+
 			}  // eo change order
 
 			$afterColumnName = $colName;
 			$afterColPos++;
 
-			// remove the processed column name from the unused current column names
-			unset($curColNames[$colKey]);
 		}  // eo common column loop
-
-		// reorder column struct array - may be conditional only if changes happened?
-		$this->asortColumnsByOrdinalPos($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"]);
 
 	}  // eo order table columns
 
@@ -1424,13 +1420,6 @@ throw new Exception("woher?");
 						$columnName = $this->quoteName($curColumnStruct["COLUMN_NAME"]);
 						$stmt = "ALTER TABLE {$tableNameQ} DROP COLUMN {$columnName}";
 						$this->execChange($stmt);
-
-						// update current db struct array
-						foreach ($this->curDbStruct["TABLES"][$curTableKey]["COLUMNS"] as &$tmpCol) {
-							if ($tmpCol["ORDINAL_POSITION"] > $curColumnStruct["ORDINAL_POSITION"]) {
-								$tmpCol["ORDINAL_POSITION"]--;
-							}
-						}
 						unset($this->curDbStruct["TABLES"][$curTableKey]["COLUMNS"][$curColumnKey]);
 					}
 				}
@@ -1501,7 +1490,7 @@ throw new Exception("woher?");
 				$nextLevel = $level + 1;
 				$nextSingleLine = $singleLine;
 				if ($singleLine > 1) {
-					$nextSingleLine = $singleLine -1;
+					$nextSingleLine = $singleLine - 1;
 				}
 				if ($key == "TABLE_META" ||
 						$key == "INDEX_META" ||
@@ -1565,7 +1554,7 @@ throw new Exception("woher?");
 	* @param $columnStruct  Array with column structure.
 	* @param $afterColumnName: The column name after which this column should be placed.
 	*        Empty means append after the last column.
-	*        -1 means insert on first position.
+	*        -1 (static::BEFORE_FIRST_COL) means insert on first position.
 	* @return The SQL statement part for a column definition.
 	*/
 	public function columnDefStmt($columnStruct, $afterColumnName = null) {
@@ -1599,8 +1588,7 @@ throw new Exception("woher?");
 
 		// if afterColumnName is empty we do nothing (that means the field is appended without position)
 		if ($afterColumnName) {
-			// -1 result in inserting on first position
-			if ($afterColumnName == -1) {
+			if ($afterColumnName == static::BEFORE_FIRST_COL) {
 				$stmt .= " FIRST";
 			}
 			else {
@@ -1686,39 +1674,6 @@ throw new Exception("woher?");
 	// ##############################################
 
 
-	/**
-	* Force order of table columns.
-	* @param columns Array with the columns structure.
-	*        The columns array is passed per reference so
-	*        the columns are ordered in place and you
-	*        dont need the return value.
-	* @return Ordered columns array.
-	*/
-	private function asortColumnsByOrdinalPos(&$columns) {
-
-		// if no columns then do nothing
-		if (!$columns) {
-			return $columns;
-		}
-
-		$tmpCols = array();
-
-		// preserve references
-		foreach ($columns as $columnKey => &$columnStruct) {
-			$tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
-		}
-		ksort($tmpCols);
-
-		// assign back to original array
-		$columns = array();
-		foreach ($tmpCols as &$columnStruct) {
-			$columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
-		}
-
-		// return per value
-		return $columns;
-	}  // eo order table columns
-
 
 	/**
 	* Force order of index columns.
@@ -1738,9 +1693,11 @@ throw new Exception("woher?");
 		$tmpCols = array();
 
 		// preserve references
+		// for backward compability include ORDINAL_POSITION
 		foreach ($columns as $columnKey => &$columnStruct) {
-			$tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
+			$tmpCols[ ($columnStruct["ORDINAL_POSITION"] + $columnStruct["SEQ_IN_INDEX"]) * 1] = &$columnStruct;
 		}
+		unset($columnStruct);
 		ksort($tmpCols);
 
 		// assign back to original array
@@ -1748,6 +1705,7 @@ throw new Exception("woher?");
 		foreach ($tmpCols as &$columnStruct) {
 			$columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
 		}
+		unset($columnStruct);
 
 		// return per value
 		return $columns;
@@ -1775,6 +1733,7 @@ throw new Exception("woher?");
 		foreach ($columns as $columnKey => &$columnStruct) {
 			$tmpCols[$columnStruct["ORDINAL_POSITION"] * 1] = &$columnStruct;
 		}
+		unset($columnStruct);
 		ksort($tmpCols);
 
 		// assign back to original array
@@ -1782,6 +1741,7 @@ throw new Exception("woher?");
 		foreach ($tmpCols as &$columnStruct) {
 			$columns[strtolower($columnStruct["COLUMN_NAME"])] = &$columnStruct;
 		}
+		unset($columnStruct);
 
 		// return per value
 		return $columns;
