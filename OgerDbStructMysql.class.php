@@ -1305,31 +1305,100 @@ throw new Exception("woher?");
 			}
 
 			$colName = $curColumnStruct["COLUMN_NAME"];
-			$newColPos = $afterColPos + 1;
+			$refColPos = $afterColPos + 1;
 
+			$oldPosColDef = null;
 			$oldColPos = 0;
 			foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as $tmpColKey => $tmpCol) {
 				$oldColPos++;
 				if ($tmpColKey == strtolower($colName)) {
 					break;
 				}
+				if ($oldColPos == $refColPos) {
+					$oldPosColDef = $tmpCol;
+				}
 			}
 
-			if ($oldColPos != $newColPos) {
-				// use current column structure because we dont want to change the column definition but only the order
-				$columnDef = $this->columnDefStmt($curColumnStruct, $afterColumnName);
-				$colNameQ = $this->quoteName($colName);
-				$this->log(static::LOG_DEBUG, "-- OldColumnPos: $oldColPos\n" .
-																			"-- NewColumnPos: $newColPos\n");
-				$stmt = "ALTER TABLE {$tableNameQ} CHANGE COLUMN $colNameQ $columnDef";
-				$this->execChange($stmt);
+			if ($oldColPos != $refColPos) {
 
-				// update current db struct array
-				unset($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$refColKey]);
-				$this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] =
-					array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], 0, $afterColPos, true) +
-					array($refColKey => $curColumnStruct) +
-					array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], $afterColPos, NULL, true);
+				// try to move current place holder of the new col pos to its final place
+				if ($oldPosColDef) {
+
+					$oldPosColName = $oldPosColDef["COLUMN_NAME"];
+					$oldPosColKey = strtolower($oldPosColName);
+
+					$oldPosColAfterRefName = "";
+					foreach ((array)$refTableStruct["COLUMNS"] as $tmpColKey => $tmpCol) {
+						if ($tmpColKey == $oldPosColKey) {
+							break;
+						}
+						$oldPosColAfterRefName = $tmpCol["COLUMN_NAME"];
+					}
+
+					// if after col does not exist in cur table move after last existing position
+					if (!$this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][strtolower($oldPosColAfterRefName)]) {
+						$tmpLast = array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], -1);
+						$oldPosColAfterRefName = $tmpLast[0]["COLUMN_NAME"];
+					}
+
+					// if the old place holder should become the follower of the new place holder
+					// there is nothing to do, because this happens automatically
+					if ($oldPosColAfterRefName != $colName) {
+
+						$oldPosColAfterColPos = 0;
+						foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as $tmpColKey => $tmpCol) {
+							if ($tmpColKey == strtolower($oldPosColAfterRefName)) {
+								break;
+							}
+							$oldPosColAfterColPos++;
+						}
+
+						$columnDef = $this->columnDefStmt($oldPosColDef, $oldPosColAfterRefName);
+						$colNameQ = $this->quoteName($oldPosColName);
+						$this->log(static::LOG_DEBUG, "-- Move old place holder to new position:\n");
+						$stmt = "ALTER TABLE {$tableNameQ} CHANGE COLUMN {$colNameQ} {$columnDef}";
+						$this->execChange($stmt);
+
+						unset($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$oldPosColKey]);
+						$this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] =
+							array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], 0, $oldPosColAfterColPos, true) +
+							array($oldPosColKey => $oldPosColDef) +
+							array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], $oldPosColAfterColPos, NULL, true);
+					}
+				}  // eo try to move current place holder of the new col pos to its final place
+
+				// test if order is correct after moving old place holder away
+				$alreadyOrdered = false;
+				$tmpAfter = "";
+				foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as $tmpColKey => $tmpCol) {
+					if ($tmpColKey == $refColKey) {
+						break;
+					}
+					$tmpAfter = $tmpCol["COLUMN_NAME"];
+				}
+				if ($tmpAfter == $afterColumnName) {
+					$alreadyOrdered = true;
+				}
+
+				// use current column structure because we dont want to change the column definition but only the order
+				if ($alreadyOrdered) {
+					$this->log(static::LOG_DEBUG, "-- Column '{$colName}' allready slipped to correct order.\n");
+				}
+				else {
+					$columnDef = $this->columnDefStmt($curColumnStruct, $afterColumnName);
+					$colNameQ = $this->quoteName($colName);
+					$this->log(static::LOG_DEBUG, "-- OldColumnPos: $oldColPos\n" .
+																				"-- NewColumnPos: $refColPos\n");
+					$stmt = "ALTER TABLE {$tableNameQ} CHANGE COLUMN $colNameQ $columnDef";
+					$this->execChange($stmt);
+
+					// update current db struct array
+					unset($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"][$refColKey]);
+					$this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] =
+						array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], 0, $afterColPos, true) +
+						array($refColKey => $curColumnStruct) +
+						array_slice($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"], $afterColPos, NULL, true);
+				}
 
 			}  // eo change order
 
