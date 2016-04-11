@@ -48,7 +48,6 @@ class OgerExtjs {
 		if ($success !== null) {
 			$arr["success"] = (boolean)$success;
 		}
-		header("Content-Type: application/json");
 		return json_encode($arr);
 	}  // eo json encoded array
 
