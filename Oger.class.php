@@ -65,6 +65,21 @@ public static function arrayMergeAssoc() {
 	return $result;
 }  // eo array merge assoc
 
+
+/**
+* Evaluate an arithmetic expressoin from string.
+* Only base arithmetic works because of security reasons.
+* DEPRECATED: only for backward compatibility with ogerArch
+*/
+public static function evalMath($str) {
+	$str = preg_replace('/[^0-9\. \+\-\*\/\(\)]+/', '', $str);
+	return eval('return ' . $str . ';');
+}
+
+
+
+
+
 	/**
 	* Restart session without warnings
 	* Cookie based sessions give a warning if reopened after output.

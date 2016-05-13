@@ -370,7 +370,7 @@ class OgerPdf0 extends TCPDF {
 			case ',':
 			case ']':
 				if (substr($value, 0, 1) == "=") {
-					$value = OgerFunc::evalMath(substr($value, 1));
+					$value = Oger::evalMath(substr($value, 1));
 				}
 				$optBlock[] = $value;
 				$value = '';
@@ -399,7 +399,7 @@ class OgerPdf0 extends TCPDF {
 		// Try to correct silently by adding current value (or an empty one)
 		if ($inBlock) {
 			if (substr($value, 0, 1) == "=") {
-				$value = OgerFunc::evalMath(substr($value, 1));
+				$value = Oger::evalMath(substr($value, 1));
 			}
 			$optBlock[] = $value;
 		}
