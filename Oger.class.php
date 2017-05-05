@@ -149,6 +149,7 @@ public static function evalMath($str) {
 	/**
 	* Create natural sort entry for an id
 	* Expand every numeric part by prefixing with zeros to a fixed length.
+	* Longer numeric parts are clipped.
 	* Negative and positive sign and decimal chars are detected as NON-number chars
 	* this is object of later improvement via opts
 	*/
@@ -168,7 +169,7 @@ public static function evalMath($str) {
 		$natId = "";
 		foreach ($matches[1] as $num) {
 			$part = array_shift($parts);
-			$natId .= $part . str_pad($num, $numlength, "0", STR_PAD_LEFT);
+			$natId .= $part . str_pad(substr($num, 0, $numlength), $numlength, "0", STR_PAD_LEFT);
 		}
 		$natId .= array_shift($parts);
 
