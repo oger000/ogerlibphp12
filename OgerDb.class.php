@@ -73,7 +73,7 @@ class OgerDb {
 			}
 			$stmt .= "UPDATE " . static::encName($tableName) . " SET $stmtSet";
 			// where values only needed on update
-			$stmt .= static::whereStmt($where);
+			$stmt .= " " . static::whereStmt($where);
 			break;
 		default:
 			throw new Exception("Unknown database store action: $action.");
@@ -166,9 +166,9 @@ class OgerDb {
 		$where = static::wherePart($params, $glueOp);
 		$chkWhere = trim($where);
 		if ($chkWhere && strtoupper(substr($chkWhere, 0, 5) != "WHERE")) {
-			$where = " WHERE $where";
+			$where = "WHERE $where";
 		}
-		return $where;
+		return " " . $where;
 	}
 
 	/**
