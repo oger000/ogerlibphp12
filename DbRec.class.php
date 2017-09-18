@@ -104,7 +104,7 @@ class DbRec {
 	* Write record values to db.
 	* Accepts old style WHERE values (as array) too.
 	*/
-	public static function store($storeAction, $values, $where = null) {
+	public static function store($storeAction, $values, $where = null, $opts = array()) {
 
 		$values = static::filterColValues($values);
 
@@ -138,6 +138,13 @@ class DbRec {
 		}
 
 		Dbw::checkStmtParams($stmt, $values);
+
+    // return raw sql and values data for debugging
+    if ($opts['getDebugInfo']) {
+      return array("stmt" => $stmt, "values" => $values);
+    }
+
+    // execute now
 		$result = $pstmt->execute($values);
 		$pstmt->closeCursor();
 
@@ -168,4 +175,3 @@ class DbRec {
 
 }  // end of class
 
-?>
