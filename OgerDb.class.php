@@ -250,6 +250,27 @@ class OgerDb {
 	}  // eo checked execute
 
 
+/**
+	* Get plain sql by replacing placeholder with escaped value
+	* Only use for debugging !!!
+	* False replacement possible (if searched for ":A" before searched for ":AA"), sort by length necessary !!!
+	* Production code should only use prepared statements with bound parameters.
+	*/
+	public static function plainSql($sql, $values = array()) {
+
+		static::checkStmtParams($sql, $values);
+
+		$params = array();
+		$quoted = array();
+		foreach ($values as $key => $val) {
+			$params[] = ":" . $key;
+			$quoted[] = static::$conn->quote($val);
+		}
+
+		$sql = str_replace($params, $quoted, $sql);
+		return $sql;
+	}  // eo plain sql
+
 
 
 	/**
