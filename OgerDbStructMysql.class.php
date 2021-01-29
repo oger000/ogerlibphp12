@@ -57,7 +57,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 	private $refDbStruct;
 	private $curDbStruct;
 
-	private $reverseMode;
+	private $dbToTplMode;
 	private $initialRefDbStruct;
 
 
@@ -90,9 +90,9 @@ class OgerDbStructMysql extends OgerDbStruct {
 	*/
 	public function getDbStruct($opts = array()) {
 
-		// in reverse mode return the initial reference structure
-		if ($this->reverseMode) {
-			$this->log(static::LOG_NOTICE, "-- Get db struct in reverse mode: Return initial reference structure.\n");
+		// in db-to-template mode return the initial reference structure
+		if ($this->dbToTplMode) {
+			$this->log(static::LOG_NOTICE, "-- Get db struct in db-to-template mode: Return initial reference structure.\n");
 			return ($this->initialRefDbStruct);
 		}
 
@@ -478,9 +478,9 @@ class OgerDbStructMysql extends OgerDbStruct {
 	*/
 	private function preProcessCheck($refDbStruct = null, $curDbStruct = null) {
 
-		// do not set database reference structure in reverse mode
-		// this is done by startReverseMode and must not be changed later.
-		if ($refDbStruct && !$this->reverseMode) {
+		// do not set database reference structure in db-to-template mode
+		// this is done by startDbToTplMode and must not be changed later.
+		if ($refDbStruct && !$this->dbToTplMode) {
 			$this->refDbStruct = $refDbStruct;
 		}
 		if (!$this->refDbStruct) {
@@ -1594,20 +1594,20 @@ throw new Exception("woher?");
 	// ##############################################
 
  /**
-	* Start the reverse mode.
+	* Start the db-to-template mode.
 	* Swap database reference structure and current structure to show how
 	* the reference structure must be changed to reflect the current structure.
 	* Implies param "dry-run".
 	* @param $refDbStruct Array with the database reference structure.
 	*/
-	public function startReverseMode ($refDbStruct) {
+	public function startDbToTplMode($refDbStruct) {
 
 		// call guard
-		if ($this->reverseMode) {
-			throw new Exception("Already in reverse mode.");
+		if ($this->dbToTplMode) {
+			throw new Exception("Already in db-to-template mode.");
 		}
 
-		$this->log(static::LOG_NOTICE, "-- Start reverse mode: Will read current database structure and use as refence structure.\n");
+		$this->log(static::LOG_NOTICE, "-- Start db-to-template mode: Will read current database structure and use as refence structure.\n");
 		$this->refDbStruct = $this->getDbStruct();
 
 		$this->initialRefDbStruct = $refDbStruct;
@@ -1615,8 +1615,8 @@ throw new Exception("woher?");
 
 		$this->setParam("dry-run", true);
 
-		$this->reverseMode = true;
-	}  // eo start reverse  mode
+		$this->dbToTplMode = true;
+	}  // eo start db-to-template mode
 
 
 
@@ -1740,10 +1740,3 @@ throw new Exception("woher?");
 
 
 }  // eo mysql struct class
-
-
-
-
-
-
-?>

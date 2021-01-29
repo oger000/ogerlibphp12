@@ -331,7 +331,7 @@ abstract class OgerDbStruct {
 	}  // eo execute stmt
 
 
-	// oe helper methods
+	// eo helper methods
 	// ###############################
 
 }  // eo class
