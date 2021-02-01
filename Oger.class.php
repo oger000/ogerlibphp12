@@ -94,21 +94,22 @@ public static function evalMath($str) {
 	* See <http://stackoverflow.com/questions/12315225/reopening-a-session-in-php>
 	*/
 	public static function sessionRestart() {
-		// version 1 (for php 5.3.x)
-		ini_set('session.use_only_cookies', false);
-		ini_set('session.use_cookies', false);
-		ini_set('session.use_trans_sid', false);
-		ini_set('session.cache_limiter', null);
-		session_start();
-		// versoin 2 (php >= 5.4.0)
+		// php > 5 (original comment was: php >= 5.4.0 ???)
 		// suppress ALL warnings at a first try and
 		// if fails redo to show warnings
-		/*
-		@session_start();
-		if (session_status() != PHP_SESSION_ACTIVE) {
-			session_start();
-		}
-		*/
+		if (PHP_MAJOR_VERSION > 5) {
+  		@session_start();
+  		if (session_status() != PHP_SESSION_ACTIVE) {  // == PHP_SESSION_NONE ???
+  			session_start();
+  		}
+    }
+    else {  // for php 5.3.x upto 5.5 ???)
+  		ini_set('session.use_only_cookies', false);
+  		ini_set('session.use_cookies', false);
+  		ini_set('session.use_trans_sid', false);
+  		ini_set('session.cache_limiter', null);
+  		session_start();
+    }
 	}  // eo reopen session
 
 

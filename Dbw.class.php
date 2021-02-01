@@ -140,6 +140,8 @@ class Dbw extends OgerDb {
 	public static function checkStruct() {
 
 		// autobackup - OgerArch specific only
+    // intended scipt for unattended backup, but can contain any php code
+    /*
 		$incFile = "exportSql.php";
 		if (file_exists($incFile)) {
 			$structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
@@ -152,6 +154,7 @@ class Dbw extends OgerDb {
 				include($incFile);
 			}
 		}  // eo ogerarch specific
+    */
 
 
 		$structTableName = "dbStructLog";
@@ -172,9 +175,39 @@ class Dbw extends OgerDb {
 			include($preProcessFile);
 		}
 
-		// check struct and update
-		$beginTime = date("c");
+    // get old structure
+    // convert pre-mysql-8 column types in template file if needed
 		$structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
+    $oldDbStruct = $structChecker->getDbStruct();
+    list($curMyVersionMajor) = explode(".", $oldDbStruct['SCHEMA_META']['version']);
+    list($tplMyVersionMajor) = explode(".", static::$struct['SCHEMA_META']['version']);
+    if ($curMyVersionMajor < 8 && $tplMyVersionMajor >= 8) {
+      foreach (static::$struct['TABLES'] as $tableKey => $tableValues) {
+        foreach ($tableValues['COLUMNS'] as $columnKey => $columnValues) {
+          if ($columnValues['COLUMN_TYPE'] == "int") {
+            static::$struct['TABLES'][$tableKey]['COLUMNS'][$columnKey]['COLUMN_TYPE'] = "int(11)";
+          }
+          if ($columnValues['COLUMN_TYPE'] == "tinyint") {
+            static::$struct['TABLES'][$tableKey]['COLUMNS'][$columnKey]['COLUMN_TYPE'] = "tinyint(4)";
+          }
+        }
+      }
+    }
+    if ($curMyVersionMajor >= 8 && $tplMyVersionMajor < 8) {
+      foreach (static::$struct['TABLES'] as $tableKey => $tableValues) {
+        foreach ($tableValues['COLUMNS'] as $columnKey => $columnValues) {
+          if ($columnValues['COLUMN_TYPE'] == "int(11)") {
+            static::$struct['TABLES'][$tableKey]['COLUMNS'][$columnKey]['COLUMN_TYPE'] = "int";
+          }
+          if ($columnValues['COLUMN_TYPE'] == "tinyint(4)") {
+            static::$struct['TABLES'][$tableKey]['COLUMNS'][$columnKey]['COLUMN_TYPE'] = "tinyint";
+          }
+        }
+      }
+    }
+
+    // check struct and update
+		$beginTime = date("c");
 		$structChecker->setParam("log-level", OgerDbStruct::LOG_DEBUG);
 		try {
 			$structChecker->updateDbStruct(static::$struct);
