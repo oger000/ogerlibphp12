@@ -118,16 +118,18 @@ class Dbw extends OgerDb {
 
 
 		// read struct file
-		$dbStructFile = "dbstruct/dbStruct.inc.php";
-		if (file_exists($dbStructFile)) {
-			static::$struct = include($dbStructFile);
-			if (!static::$struct) {
-				throw new Exception("No structure found in db structure file $dbStructFile.");
-				}
-		}
-		else {
-			throw new Exception("Cannot find db structure file $dbStructFile.");
-		}
+    if (!static::$dbDef['skipDbStructCheck']) {
+  		$dbStructFile = "dbstruct/dbStruct.inc.php";
+  		if (file_exists($dbStructFile)) {
+  			static::$struct = include($dbStructFile);
+  			if (!static::$struct) {
+  				throw new Exception("No structure found in db structure file $dbStructFile.");
+  				}
+  		}
+  		else {
+  			throw new Exception("Cannot find db structure file $dbStructFile.");
+  		}
+    }  // eo not skip struct check
 
 		return static::$conn;
 	}  // eo open
@@ -138,6 +140,10 @@ class Dbw extends OgerDb {
 	* Log happens only if structure log table is present
 	*/
 	public static function checkStruct() {
+
+    if (static::$dbDef['skipDbStructCheck']) {
+      return;
+    }
 
 		// autobackup - OgerArch specific only
     // intended scipt for unattended backup, but can contain any php code
