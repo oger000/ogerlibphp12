@@ -91,25 +91,24 @@ public static function evalMath($str) {
 	* because in file based session storage the session file is locked and
 	* every other requests within this session that opens the session has
 	* to wait till the first script is finished.
-	* See <http://stackoverflow.com/questions/12315225/reopening-a-session-in-php>
+  * see <https://stackoverflow.com/questions/12315225/reopening-a-session-in-php#12315542>
+  * see also inital session start in init.inc.php
 	*/
 	public static function sessionRestart() {
-		// php > 5 (original comment was: php >= 5.4.0 ???)
-		// suppress ALL warnings at a first try and
-		// if fails redo to show warnings
-		if (PHP_MAJOR_VERSION > 5) {
-  		@session_start();
-  		if (session_status() != PHP_SESSION_ACTIVE) {  // == PHP_SESSION_NONE ???
-  			session_start();
-  		}
-    }
-    else {  // for php 5.3.x upto 5.5 ???)
-  		ini_set('session.use_only_cookies', false);
-  		ini_set('session.use_cookies', false);
+    // the version for php7 should work for php5 too, but we let the working code untouched - maybe cleanup later
+    if (PHP_MAJOR_VERSION < 7) {
+      ini_set('session.use_only_cookies', false);
+      ini_set('session.use_cookies', false);
   		ini_set('session.use_trans_sid', false);
   		ini_set('session.cache_limiter', null);
   		session_start();
     }
+    else {  // php >= 7
+      @session_start();
+  		if (session_status() != PHP_SESSION_ACTIVE) {  // == PHP_SESSION_NONE ???
+  			session_start();
+  		}
+    }  // eo php7
 	}  // eo reopen session
 
 
