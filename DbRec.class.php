@@ -60,7 +60,7 @@ class DbRec {
 	* Get sql template for given target.
 	*/
 	public static function getSqlTpl($target, &$opts = array()) {
-		return "";
+		return $target;
 	}  // eo get sql tpl
 
 
@@ -71,7 +71,7 @@ class DbRec {
 	*/
 	public static function getSql($target, &$seleVals = array(), $req = null, &$tplOpts = array()) {
 
-		$tpl = static::getSqlTpl($target, $tplOpts);
+	  $tpl = static::getSqlTpl($target, $tplOpts);
 
 		switch ($tplOpts['parser']) {
 		case "php-sql":
@@ -178,4 +178,3 @@ class DbRec {
 
 
 }  // end of class
-
