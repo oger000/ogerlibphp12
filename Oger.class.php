@@ -54,6 +54,9 @@ class Oger {
 /**
  * Merge two or more arrays and preserve numeric keys
  * DEPRECATED: only for backward compatibility with ogerArch
+ * Use uni operator + for arrays to preserve values with the same key
+ * of the first array and ignore later ones.
+ * Use array_replace to overwrite values with the same key with last occurence
  */
 public static function arrayMergeAssoc() {
 	$result = array();
