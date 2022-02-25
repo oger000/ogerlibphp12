@@ -549,7 +549,7 @@ class OgerPdf0 extends TCPDF {
 	*/
 	public function tplCell($opts, $text) {
 
-		list($width, $height, $borderDef, $ln, $align, $fillDef, $link) = $opts;
+		list($width, $height, $borderDef, $ln, $align, $fillDef, $link, $stretch) = $opts;
 
 		if ($width === 'FIT') {
 			$width = parent::GetStringWidth($text);
@@ -571,7 +571,7 @@ class OgerPdf0 extends TCPDF {
 			$this->tplSetFillColor($color);
 		}
 
-		parent::Cell($width, $height, $text, $border, $ln, $align, $fill, $link);
+		parent::Cell($width, $height, $text, $border, $ln, $align, $fill, $link, $stretch);
 	}  // eo tpl cell output
 
 
