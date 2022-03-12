@@ -64,7 +64,7 @@ class OgerPdf0 extends TCPDF {
 	public function ogerClippedCell($width, $height, $text, $border = 0, $ln = 0, $align = '', $fill = 0, $link = null) {
 
 		while (strlen($text) > 0 && parent::GetStringWidth($text) > $width) {
-			$text = substr($text, 0, -1);
+			$text = mb_substr($text, 0, -1, "UTF-8");
 		}
 		parent::Cell($width, $height, $text, $border, $ln, $align, $fill, $link);
 
