@@ -75,13 +75,9 @@ abstract class OgerDbStruct {
 
 	/**
 	* Get the current database structure.
-	* @param $opts Optional options array where the key is the option name.<br>
-	*        Valid options are:<br>
-	*        - whereTables: A where condition to restrict the included tables.
-	*          If empty all tables are included.
 	* @return Array with database structure.
 	*/
-	abstract public function getDbStruct($opts = array());
+	abstract public function getDbStruct();
 
 
 	/**

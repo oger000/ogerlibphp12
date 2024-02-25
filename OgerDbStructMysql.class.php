@@ -64,10 +64,15 @@ class OgerDbStructMysql extends OgerDbStruct {
 	/**
 	 * @see OgerDbStruct::__construct().
 	 * @throw Throws an exception if the driver name does not fit.
+	 * @globalOpts Use global opts array even if used only at some points. Keys are option names.
+	 *        Valid keys are:
+	 *           - whereTables: A where condition to restrict the included tables. If empty all tables are included.
+	 *           - ignoreCollate: Ignore collate attribure in table-def and column-def.
 	 */
-	public function __construct($conn, $dbName) {
+	public function __construct($conn, $dbName, $globalOpts = array()) {
 
 		parent::__construct($conn, $dbName);
+		$this->opts = $globalOpts;
 
 		if ($this->driverName != "mysql") {
 			throw new Exception("Invalid driver {$this->driverName} for " . __CLASS__);
@@ -88,7 +93,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 	* Get the current database structure.
 	* @see OgerDbStruct::getDbStruct().
 	*/
-	public function getDbStruct($opts = array()) {
+	public function getDbStruct() {
 
 		// in db-to-template mode return the initial reference structure
 		if ($this->dbToTplMode) {
@@ -157,8 +162,8 @@ class OgerDbStructMysql extends OgerDbStruct {
 					WHERE TABLE_CATALOG=:catalogName AND
 								TABLE_SCHEMA=:dbName AND TABLE_TYPE='BASE TABLE'
 				";
-		if ($opts["whereTables"]) {
-			$stmt .= " AND {$opts["whereTables"]}";
+		if ($this->opts["whereTables"]) {
+			$stmt .= " AND {$this->opts["whereTables"]}";
 		}
 		$pstmt = $this->conn->prepare($stmt);
 		$pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName));
@@ -652,7 +657,6 @@ class OgerDbStructMysql extends OgerDbStruct {
 	/**
 	* Add a table to the current database structure.
 	* @param $tableStruct Array with the table structure.
-	* @param $opts Optional option array. Key is option.
 	*/
 	public function addTable($tableStruct) {
 
@@ -699,9 +703,9 @@ class OgerDbStructMysql extends OgerDbStruct {
 		// and does this internally automatically if a collation is given.
 		// So we depend on this - provide the collation and omit the charset.
 		$stmt .= " ENGINE={$tableMeta['ENGINE']}" .
-						 " DEFAULT" .
+						 ($this->opts["ignoreCollate"] ? "" : " DEFAULT COLLATE={$tableMeta['TABLE_COLLATION']}") .
 						 // " CHARSET={$tableMeta['']}" .  // see note above
-						 " COLLATE={$tableMeta['TABLE_COLLATION']}";
+						 "";
 
 
 		// execute the statement
@@ -854,7 +858,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 		$tableName = $fkStruct["FOREIGN_KEY_META"]["TABLE_NAME"];
 		$tableNameQ = $this->quoteName($tableName);
 
-		$stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct, $opts);
+		$stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct, $this->opts);
 		$this->execChange($stmt);
 
 		// update current db struct array
@@ -963,14 +967,14 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 		$refTableMeta = $refTableStruct["TABLE_META"];
 		$curTableMeta = $curTableStruct["TABLE_META"];
-		if ($refTableMeta["TABLE_COLLATION"] != $curTableMeta["TABLE_COLLATION"] ||
+		if (($refTableMeta["TABLE_COLLATION"] != $curTableMeta["TABLE_COLLATION"] && !$this->opts["ignoreCollate"]) ||
 				$refTableMeta["ENGINE"] != $curTableMeta["ENGINE"]) {
 
 			$stmt .= "ALTER TABLE " .
 							 $this->quoteName($tableName) .
 							 " ENGINE=" . $refTableMeta["ENGINE"] .
-							 " DEFAULT" .
-							 " COLLATE=" . $refTableMeta["TABLE_COLLATION"];
+							 ($this->opts["ignoreCollate"] ? "" : " DEFAULT COLLATE=" . $refTableMeta["TABLE_COLLATION"]) .
+							 "";
 			$this->execChange($stmt);
 
 			// update current db struct array
@@ -1634,9 +1638,14 @@ throw new Exception("woher?");
 	*/
 	public function columnDefStmt($columnStruct, $afterColumnName = null) {
 
+		// HACK remove display length from int
+		if (strpos($columnStruct["COLUMN_TYPE"], "int(") !== false ) {
+			$columnStruct["COLUMN_TYPE"] = substr($columnStruct["COLUMN_TYPE"], 0, strpos($columnStruct["COLUMN_TYPE"], "("));
+		}
+
 		$stmt = $this->quoteName($columnStruct["COLUMN_NAME"]) .
 						" " . $columnStruct["COLUMN_TYPE"] .
-						($columnStruct["COLLATION_NAME"] ? " COLLATE {$columnStruct["COLLATION_NAME"]}" : "") .
+						($columnStruct["COLLATION_NAME" && !$this->opts["ignoreCollate"]] ? " COLLATE {$columnStruct["COLLATION_NAME"]}" : "") .
 						($columnStruct["IS_NULLABLE"] == "NO" ? " NOT NULL" : "") .
 						($columnStruct["EXTRA"] ? " {$columnStruct["EXTRA"]}" : "");
 
