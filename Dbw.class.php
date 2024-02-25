@@ -139,7 +139,7 @@ class Dbw extends OgerDb {
 	* Check database structure and change if necessary
 	* Log happens only if structure log table is present
 	*/
-	public static function checkStruct() {
+	public static function checkStruct($opts = array()) {
 
     if (static::$dbDef['skipDbStructCheck']) {
       return;
@@ -183,7 +183,7 @@ class Dbw extends OgerDb {
 
     // get old structure
     // convert pre-mysql-8 column types in template file if needed
-		$structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
+		$structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"], $opts);
     $oldDbStruct = $structChecker->getDbStruct();
     list($curMyVersionMajor) = explode(".", $oldDbStruct['SCHEMA_META']['version']);
     list($tplMyVersionMajor) = explode(".", static::$struct['SCHEMA_META']['version']);
@@ -230,7 +230,7 @@ class Dbw extends OgerDb {
 		if ((trim($log) || trim($error))) {
 
 			// use another struct checker and do post check by reapply
-			$structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
+			$structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"], $opts);
 			$structChecker->setParam("log-level", OgerDbStruct::LOG_DEBUG);
 			$structChecker->setParam("dry-run", true);
 			$structChecker->updateDbStruct(static::$struct);
@@ -238,7 +238,7 @@ class Dbw extends OgerDb {
 			$postLog = trim($structChecker->flushLog());
 
 			// use another struct checker and do surplus check
-			$structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"]);
+			$structChecker = new OgerDbStructMysql(static::$conn, static::$dbDef["dbName"], $opts);
 			$structChecker->setParam("log-level", OgerDbStruct::LOG_DEBUG);
 			$structChecker->setParam("dry-run", true);
 			//$structChecker->forceDbStruct(static::$struct);
