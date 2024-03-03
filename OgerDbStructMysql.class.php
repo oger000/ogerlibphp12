@@ -65,14 +65,10 @@ class OgerDbStructMysql extends OgerDbStruct {
 	 * @see OgerDbStruct::__construct().
 	 * @throw Throws an exception if the driver name does not fit.
 	 * @globalOpts Use global opts array even if used only at some points. Keys are option names.
-	 *        Valid keys are:
-	 *           - whereTables: A where condition to restrict the included tables. If empty all tables are included.
-	 *           - ignoreCollate: Ignore collate attribure in table-def and column-def.
 	 */
-	public function __construct($conn, $dbName, $globalOpts = array()) {
+	public function __construct($conn, $dbName) {
 
 		parent::__construct($conn, $dbName);
-		$this->opts = $globalOpts;
 
 		if ($this->driverName != "mysql") {
 			throw new Exception("Invalid driver {$this->driverName} for " . __CLASS__);
@@ -162,8 +158,8 @@ class OgerDbStructMysql extends OgerDbStruct {
 					WHERE TABLE_CATALOG=:catalogName AND
 								TABLE_SCHEMA=:dbName AND TABLE_TYPE='BASE TABLE'
 				";
-		if ($this->opts["whereTables"]) {
-			$stmt .= " AND {$this->opts["whereTables"]}";
+		if ($this->getParam("whereTables")) {
+			$stmt .= " AND {$this->getParam("whereTables")}";
 		}
 		$pstmt = $this->conn->prepare($stmt);
 		$pstmt->execute(array("catalogName" => $this->defCatalogName, "dbName" => $this->dbName));
@@ -703,7 +699,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 		// and does this internally automatically if a collation is given.
 		// So we depend on this - provide the collation and omit the charset.
 		$stmt .= " ENGINE={$tableMeta['ENGINE']}" .
-						 ($this->opts["ignoreCollate"] ? "" : " DEFAULT COLLATE={$tableMeta['TABLE_COLLATION']}") .
+						 ($this->getParam("ignoreCollate") ? "" : " DEFAULT COLLATE={$tableMeta['TABLE_COLLATION']}") .
 						 // " CHARSET={$tableMeta['']}" .  // see note above
 						 "";
 
@@ -858,7 +854,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 		$tableName = $fkStruct["FOREIGN_KEY_META"]["TABLE_NAME"];
 		$tableNameQ = $this->quoteName($tableName);
 
-		$stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct, $this->opts);
+		$stmt = "ALTER TABLE $tableName ADD " . $this->foreignKeyDefStmt($fkStruct);
 		$this->execChange($stmt);
 
 		// update current db struct array
@@ -967,20 +963,20 @@ class OgerDbStructMysql extends OgerDbStruct {
 
 		$refTableMeta = $refTableStruct["TABLE_META"];
 		$curTableMeta = $curTableStruct["TABLE_META"];
-		if (($refTableMeta["TABLE_COLLATION"] != $curTableMeta["TABLE_COLLATION"] && !$this->opts["ignoreCollate"]) ||
-				$refTableMeta["ENGINE"] != $curTableMeta["ENGINE"]) {
 
-			$stmt .= "ALTER TABLE " .
-							 $this->quoteName($tableName) .
-							 " ENGINE=" . $refTableMeta["ENGINE"] .
-							 ($this->opts["ignoreCollate"] ? "" : " DEFAULT COLLATE=" . $refTableMeta["TABLE_COLLATION"]) .
-							 "";
+		$stmt = "";
+		if ($refTableMeta["ENGINE"] != $curTableMeta["ENGINE"]) {
+			"ENGINE=" . $refTableMeta["ENGINE"];
+		}
+		if (($refTableMeta["TABLE_COLLATION"] != $curTableMeta["TABLE_COLLATION"]) && !$this->getParam("ignoreCollate")) {
+			$stmt .= " DEFAULT COLLATE=" . $refTableMeta["TABLE_COLLATION"];
+		}
+		if ($stmt) {
+			$stmt .= "ALTER TABLE " . $stmt;
 			$this->execChange($stmt);
-
 			// update current db struct array
 			$this->curDbStruct["TABLES"][strtolower($tableName)]["TABLE_META"] = $refTableMeta;
-
-		}  // eo table meta
+		}
 
 	}  // eo refresh table core
 
@@ -1645,7 +1641,7 @@ throw new Exception("woher?");
 
 		$stmt = $this->quoteName($columnStruct["COLUMN_NAME"]) .
 						" " . $columnStruct["COLUMN_TYPE"] .
-						($columnStruct["COLLATION_NAME" && !$this->opts["ignoreCollate"]] ? " COLLATE {$columnStruct["COLLATION_NAME"]}" : "") .
+						($columnStruct["COLLATION_NAME"] && !$this->getParam("ignoreCollate") ? " COLLATE {$columnStruct["COLLATION_NAME"]}" : "") .
 						($columnStruct["IS_NULLABLE"] == "NO" ? " NOT NULL" : "") .
 						($columnStruct["EXTRA"] ? " {$columnStruct["EXTRA"]}" : "");
 

@@ -110,7 +110,9 @@ class DbRec {
 	*/
 	public static function store($storeAction, $values, $where = null, $opts = array()) {
 
+		// @file_put_contents("debug.localonly", "\n-----\nvalues1=" . var_export($values, true) . "\n\n", FILE_APPEND);
 		$values = static::filterColValues($values);
+		// @file_put_contents("debug.localonly", "\n-----\nvalues2=" . var_export($values, true) . "\n\n", FILE_APPEND);
 
 		// sanity check - do not update without WHERE clause
 		if ($storeAction == "UPDATE") {
@@ -120,6 +122,7 @@ class DbRec {
 		}  // eo update WHERE check
 
 		$stmt = Dbw::getStoreStmt($storeAction, static::$tableName, $values, $where);
+		// @file_put_contents("debug.localonly", "\n-----\nsql=\n$stmt\n\nvalues=\n" . var_export($values, true) . "\n\nwhere=\n" . var_export($where, true) . "\n\n", FILE_APPEND);
 		$pstmt = Dbw::$conn->prepare($stmt);
 
 
