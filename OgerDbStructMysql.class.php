@@ -807,6 +807,7 @@ class OgerDbStructMysql extends OgerDbStruct {
 				$afterColPos = 0;            // ordinal pos starts at 1
 			}
 			else {
+				$afterColPos = 0;            // ordinal pos starts at 1
 				foreach ($this->curDbStruct["TABLES"][$tableKey]["COLUMNS"] as $tmpColKey => $tmpCol) {
 					$afterColPos++;
 					if ($tmpColKey == strtolower($afterColumnName)) {
