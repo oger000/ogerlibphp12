@@ -49,7 +49,7 @@ class OgerPdf0 extends TCPDF {
 	* Constructor.
 	*/
 	public function __construct($orientation = 'P', $unit = 'mm', $format = 'A4',           // FPDF
-															$unicode = true, $encoding = 'UTF-8', $diskcace = false) {  // additional parameters for TCPDF
+															$unicode = true, $encoding = 'UTF-8', $diskspace = false) {  // additional parameters for TCPDF
 
 		parent::__construct($orientation, $unit, $format, $unicode, $encoding, $diskspace);
 		$this->startTime = time();
