@@ -117,19 +117,19 @@ class Dbw extends OgerDb {
 		}  // eo mysql extra options
 
 
-		// read struct file
-    if (!static::$dbDef['skipDbStructCheck']) {
-  		$dbStructFile = "dbstruct/dbStruct.inc.php";
-  		if (file_exists($dbStructFile)) {
-  			static::$struct = include($dbStructFile);
-  			if (!static::$struct) {
-  				throw new Exception("No structure found in db structure file $dbStructFile.");
-  				}
-  		}
-  		else {
-  			throw new Exception("Cannot find db structure file $dbStructFile.");
-  		}
-    }  // eo not skip struct check
+		// read struct file, even if struct check is skipped, because we need the column info for creating sql statements
+    // if (!static::$dbDef['skipDbStructCheck']) {
+		$dbStructFile = "dbstruct/dbStruct.inc.php";
+		if (file_exists($dbStructFile)) {
+			static::$struct = include($dbStructFile);
+			if (!static::$struct) {
+				throw new Exception("No structure found in db structure file $dbStructFile.");
+				}
+		}
+		else {
+			throw new Exception("Cannot find db structure file $dbStructFile.");
+		}
+    // }  // eo not skip struct check
 
 		return static::$conn;
 	}  // eo open
