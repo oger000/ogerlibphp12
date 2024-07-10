@@ -263,7 +263,7 @@ class OgerPdf0 extends TCPDF {
 		case 'NEWLINE':
 		case 'NL':
 		case 'LN':
-			$this->ln();
+			$this->ln($opts[0][0]);
 			break;
 		case 'STARTTRANSFORM':
 			$this->startTransform();
